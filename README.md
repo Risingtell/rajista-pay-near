@@ -22,9 +22,10 @@ the contract settled it. Receipt: [/p/RISINGTE-MWDBSJXB3U2](https://rajista-pay.
 | Invoice `Paid`, payer `intents.near`, not late, nothing held; shop balance 0.85 USDC | `get_invoice`, `get_balance` on `rajistapay.near` |
 | Shop withdraws: 0.85 USDC lands in `risingtell.near`, contract balance back to 0 | [NEAR tx 5YcSu3tj…](https://nearblocks.io/txns/5YcSu3tjYWPHKmKuPuBcE6p7p1GtU9EmBW3Pp3XmDT9b) |
 
-`rajistapay.near` has no access keys: its code (hash `GKKmNPXpSrEUDaNjGMcza2zCNhB5LDeSZt1JdnYjbuHG`,
-built from `res/rajista_pay.wasm` in this repo) can never be changed, and nobody can move a shop's
-money except the shop.
+`rajistapay.near` has no access keys: its code can never be changed, and nobody can move a shop's
+money except the shop. The build is reproducible: `bash scripts/build.sh` on a fresh clone gives a
+byte-identical `res/rajista_pay.wasm` (SHA-256 `e390f9e0…0b8f`), the same code NearBlocks shows on
+`rajistapay.near` (code hash `GKKmNPXpSrEUDaNjGMcza2zCNhB5LDeSZt1JdnYjbuHG` is that SHA-256 in base58).
 
 ## Try it in two minutes (free, test network)
 
