@@ -238,10 +238,10 @@ $("#btn-issue").addEventListener("click", async () => {
     // The invoice now exists on chain: from here on, never report it as failed.
     queueReceipt(id, receipt);
     showCurrent(id, ngn, usd);
-    flushReceipts();
     $("#items tbody").innerHTML = "";
     addItem();
-    refreshList();
+    // List the new invoice once its receipt is saved, so the row shows its items and naira total.
+    flushReceipts().finally(() => refreshList());
   } catch (e) {
     toast(e.message ?? "Could not create the invoice", "bad");
     render();
@@ -317,6 +317,8 @@ async function watchCurrent(id) {
   }
   refreshMoney();
   refreshList();
+  // An RPC node can lag a block behind the one that saw the payment: refresh once more.
+  setTimeout(() => { refreshMoney(); refreshList(); }, 4000);
 }
 
 async function voidInvoice(id) {
