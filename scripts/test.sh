@@ -1,7 +1,8 @@
 #!/bin/bash
-# Contract unit tests. Run in WSL.
+# Contract unit tests (Linux, macOS or WSL). Needs Rust stable.
 set -e
 source ~/.cargo/env 2>/dev/null || true
-cd /mnt/c/Users/HP/Projects/rajista-pay-near
-export CARGO_TARGET_DIR=$HOME/rajista-pay-near-target
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
 cargo test -p rajista-pay 2>&1 | tail -30

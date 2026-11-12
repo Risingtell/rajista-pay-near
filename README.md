@@ -111,14 +111,27 @@ counter.
 
 ## Run it
 
+Prerequisites: Node 20 or later (built with 24), and for the contract Rust stable (built with 1.96)
+with the `wasm32-unknown-unknown` target plus binaryen's `wasm-opt` (built with version 130), on
+Linux, macOS or WSL.
+
 ```bash
 npm install
+npm test                                 # 36 contract tests (scripts/test.sh)
 npm run build && npx wrangler dev        # app + API on http://localhost:8787
-bash scripts/test.sh                     # contract tests
-bash scripts/build.sh                    # rebuild res/*.wasm
-node scripts/testnet-e2e.mjs --fresh     # full testnet run (needs a funded key in .keys/)
-node scripts/testnet-guards.mjs          # calls the contract must refuse, with their messages
+bash scripts/build.sh                    # rebuild res/*.wasm from source
 ```
+
+The whole money flow on testnet, with your own free account (the faucet gives it 10 NEAR):
+
+```bash
+node scripts/testnet-account.mjs yourname-rp.testnet
+TESTNET_ROOT=yourname-rp.testnet node scripts/testnet-e2e.mjs --fresh    # 12 checks, writes docs/testnet-run.md
+TESTNET_ROOT=yourname-rp.testnet node scripts/testnet-guards.mjs        # 7 calls the contract must refuse
+```
+
+The first deploys test USDC and the invoice contract under your account and runs every payment
+path in the table above; each step prints its NearBlocks link. Keys stay in `.keys/` (gitignored).
 
 ## Prior work and what is new
 

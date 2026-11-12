@@ -1,8 +1,21 @@
 // Checks the entry-point guards on testnet: each call below must be refused by the contract.
 import { Account, JsonRpcProvider, teraToGas } from "near-api-js";
 import { readFileSync } from "node:fs";
-const ROOT = "rajistapay-demo.testnet", PAY = `pay.${ROOT}`, SHOP = `shop.${ROOT}`;
-const key = JSON.parse(readFileSync(`.keys/${ROOT}.json`, "utf8")).private_key;
+import { existsSync as keyExists } from "node:fs";
+const keyFile = root => {
+  const f = `.keys/${root}.json`;
+  if (!keyExists(f)) {
+    console.error(`No key for ${root}. Create a funded testnet account first:
+  node scripts/testnet-account.mjs <name>.testnet
+then run this script with TESTNET_ROOT=<name>.testnet`);
+    process.exit(2);
+  }
+  return f;
+};
+
+// Your own testnet account: node scripts/testnet-account.mjs <name>.testnet, then TESTNET_ROOT=<name>.testnet
+const ROOT = process.env.TESTNET_ROOT ?? "rajistapay-demo.testnet", PAY = `pay.${ROOT}`, SHOP = `shop.${ROOT}`;
+const key = JSON.parse(readFileSync(keyFile(ROOT), "utf8")).private_key;
 const provider = new JsonRpcProvider({ url: "https://test.rpc.fastnear.com" });
 const as = id => new Account(id, provider, key);
 const cases = [

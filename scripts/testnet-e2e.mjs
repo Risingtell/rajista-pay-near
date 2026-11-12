@@ -6,10 +6,23 @@
 import { Account, JsonRpcProvider, KeyPair, nearToYocto, teraToGas } from "near-api-js";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { existsSync as keyExists } from "node:fs";
+const keyFile = root => {
+  const f = `.keys/${root}.json`;
+  if (!keyExists(f)) {
+    console.error(`No key for ${root}. Create a funded testnet account first:
+  node scripts/testnet-account.mjs <name>.testnet
+then run this script with TESTNET_ROOT=<name>.testnet`);
+    process.exit(2);
+  }
+  return f;
+};
 
-const ROOT = "rajistapay-demo.testnet";
+
+// Your own testnet account: node scripts/testnet-account.mjs <name>.testnet, then TESTNET_ROOT=<name>.testnet
+const ROOT = process.env.TESTNET_ROOT ?? "rajistapay-demo.testnet";
 const EXPLORER = "https://testnet.nearblocks.io/txns/";
-const key = JSON.parse(readFileSync(`.keys/${ROOT}.json`, "utf8"));
+const key = JSON.parse(readFileSync(keyFile(ROOT), "utf8"));
 const provider = new JsonRpcProvider({ url: "https://test.rpc.fastnear.com" });
 const acct = (id, k = key.private_key) => new Account(id, provider, k);
 
