@@ -20,6 +20,7 @@ the contract settled it. Receipt: [/p/RISINGTE-MWDBSJXB3U2](https://rajista-pay.
 | NEAR Intents swaps exactly 0.85 USDC to NEAR and returns the unused 0.006188 to the customer | 1Click status `SUCCESS` |
 | `intents.near` delivers with `ft_transfer_call`; the contract receives `msg: "RISINGTE-MWDBSJXB3U2"` and settles it | [NEAR tx Afo9C89H…](https://nearblocks.io/txns/Afo9C89HutErBxJgqU4N9NrhMqEAV5BZLnxNSFddqzWE) |
 | Invoice `Paid`, payer `intents.near`, not late, nothing held; shop balance 0.85 USDC | `get_invoice`, `get_balance` on `rajistapay.near` |
+| Shop withdraws: 0.85 USDC lands in `risingtell.near`, contract balance back to 0 | [NEAR tx 5YcSu3tj…](https://nearblocks.io/txns/5YcSu3tjYWPHKmKuPuBcE6p7p1GtU9EmBW3Pp3XmDT9b) |
 
 `rajistapay.near` has no access keys: its code (hash `GKKmNPXpSrEUDaNjGMcza2zCNhB5LDeSZt1JdnYjbuHG`,
 built from `res/rajista_pay.wasm` in this repo) can never be changed, and nobody can move a shop's
