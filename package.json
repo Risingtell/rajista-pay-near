@@ -21,6 +21,7 @@
     "build:test": "vite build --mode test",
     "dev": "wrangler dev",
     "deploy": "vite build && wrangler deploy",
-    "test": "bash scripts/test.sh"
+    "test": "bash scripts/test.sh",
+    "verify": "node scripts/verify-mainnet.mjs"
   }
 }

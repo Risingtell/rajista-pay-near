@@ -22,6 +22,9 @@ the contract settled it. Receipt: [/p/RISINGTE-MWDBSJXB3U2](https://rajista-pay.
 | Invoice `Paid`, payer `intents.near`, not late, nothing held; shop balance 0.85 USDC | `get_invoice`, `get_balance` on `rajistapay.near` |
 | Shop withdraws: 0.85 USDC lands in `risingtell.near`, contract balance back to 0 | [NEAR tx 5YcSu3tj…](https://nearblocks.io/txns/5YcSu3tjYWPHKmKuPuBcE6p7p1GtU9EmBW3Pp3XmDT9b) |
 
+**Check it yourself** without an explorer or a key: `npm install && npm run verify` re-reads every
+claim above from a public NEAR RPC (10 checks, exit code 0 when all pass).
+
 `rajistapay.near` has no access keys: its code can never be changed, and nobody can move a shop's
 money except the shop. The build is reproducible: `bash scripts/build.sh` on a fresh clone gives a
 byte-identical `res/rajista_pay.wasm` (SHA-256 `e390f9e0…0b8f`), the same code NearBlocks shows on
@@ -119,6 +122,7 @@ Linux, macOS or WSL.
 ```bash
 npm install
 npm test                                 # 36 contract tests (scripts/test.sh)
+npm run verify                           # 10 checks of the mainnet proof, from a public RPC
 npm run build && npx wrangler dev        # app + API on http://localhost:8787
 bash scripts/build.sh                    # rebuild res/*.wasm from source
 ```
