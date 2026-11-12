@@ -1,6 +1,6 @@
 # Testnet run
 
-Run on 2026-11-10T10:12:16.006Z by `node scripts/testnet-e2e.mjs`. Every step links to its transaction on NearBlocks.
+Run on 2026-11-11T10:58:14.928Z by `node scripts/testnet-e2e.mjs`. Every step links to its transaction on NearBlocks.
 
 - Rajista Pay contract: [`pay.rajistapay-demo.testnet`](https://testnet.nearblocks.io/address/pay.rajistapay-demo.testnet)
 - Test USDC (6 decimals): `usdc.rajistapay-demo.testnet`
@@ -9,30 +9,30 @@ Run on 2026-11-10T10:12:16.006Z by `node scripts/testnet-e2e.mjs`. Every step li
 
 | Step | Transaction | Contract events |
 |---|---|---|
-| deploy Rajista Pay | [7QpCcuMg](https://testnet.nearblocks.io/txns/7QpCcuMgs7FcHpmTUnXi67zFuqM9eVt4qcJXjxsFjy6L) |  |
-| init Rajista Pay (router = stand-in for intents.near) | [GvkbZ7qH](https://testnet.nearblocks.io/txns/GvkbZ7qHEeRCAryBPe9wtEhbjNTy9ATbPgx42MimMg5s) |  |
-| customer mints 40 test USDC | [9YPEwVmU](https://testnet.nearblocks.io/txns/9YPEwVmUjWqwGQfvRSUa7WpF32UVF7jRmQ3HJihZsb5d) |  |
-| router mints 40 test USDC | [6YwYJ1rN](https://testnet.nearblocks.io/txns/6YwYJ1rNNufXZ1ct8jM6QhKc1rJn8EKnAkFY87CmcD3u) |  |
-| shop prepays 0.05 NEAR of invoice storage | [9wULjjnm](https://testnet.nearblocks.io/txns/9wULjjnmn6BDPN4pX5zrUKaVT38kCFy1Jqmjp2Hoxs3d) |  |
-| shop adds a till key (create/void invoices only) | [H2ZoX3QP](https://testnet.nearblocks.io/txns/H2ZoX3QPqMziFXVS514G1wnaqBH7fB6XBEXvjGK4f7oH) |  |
-| till issues KANO-mwaj4oe6-A: 12.50 USDC, no wallet prompt | [8rmJ6gmM](https://testnet.nearblocks.io/txns/8rmJ6gmMLDNoaY46b7tVpwcYnA8s6nJNaSHo5NjKTRcA) | `invoice_created {"id":"KANO-mwaj4oe6-A","shop":"shop.rajistapay-demo.testnet","amount":"12500000"}` |
-| wallet pays 10.00 (short) → refunded | [G477Z468](https://testnet.nearblocks.io/txns/G477Z468meMXzAVCoDfrAikC7p2rqY4RfHdQjCfcPGGD) | `payment_rejected {"id":"KANO-mwaj4oe6-A","payer":"customer.rajistapay-demo.testnet","amount":"10000000","reason":"short payment"}` |
-| wallet pays 13.00 → paid, 0.50 change returned | [F4SmVhUR](https://testnet.nearblocks.io/txns/F4SmVhURQZWz8tgwnkvefm3LArfXvX4zEdTJ9giBQC8q) | `invoice_paid {"id":"KANO-mwaj4oe6-A","shop":"shop.rajistapay-demo.testnet","payer":"customer.rajistapay-demo.testnet","amount":"12500000","refunded":"500000","extra":"0","late":false}` |
-| wallet pays the same invoice again → refunded | [2XMvF81E](https://testnet.nearblocks.io/txns/2XMvF81E52LZz1kouy25R1sjVGVwkFRdCMQwZJ3qCtPz) | `payment_rejected {"id":"KANO-mwaj4oe6-A","payer":"customer.rajistapay-demo.testnet","amount":"12500000","reason":"already paid"}` |
-| wallet pays an unknown invoice → refunded | [HvyHpbaW](https://testnet.nearblocks.io/txns/HvyHpbaWvB12hYmbXPPSzrvMnVaxNjqC1Qw33hyQ6ivj) | `payment_rejected {"id":"KANO-mwaj4oe6-nope","payer":"customer.rajistapay-demo.testnet","amount":"5000000","reason":"unknown invoice"}` |
-| till issues KANO-mwaj4oe6-V | [6ifLzu9H](https://testnet.nearblocks.io/txns/6ifLzu9HnzNFF7siCJ3soSNu3A3bXud5cT7pDMthcxWC) | `invoice_created {"id":"KANO-mwaj4oe6-V","shop":"shop.rajistapay-demo.testnet","amount":"3000000"}` |
-| till voids KANO-mwaj4oe6-V | [13J6HwUJ](https://testnet.nearblocks.io/txns/13J6HwUJ3iYfkwQP1uewyckTSRNJbba9GdfHs832xoFH) | `invoice_voided {"id":"KANO-mwaj4oe6-V"}` |
-| wallet pays the voided invoice → refunded | [HeQzcdYh](https://testnet.nearblocks.io/txns/HeQzcdYh5Mw6T44EKBSpF5AqFLwWaFeZHa8QCPNxyJhB) | `payment_rejected {"id":"KANO-mwaj4oe6-V","payer":"customer.rajistapay-demo.testnet","amount":"3000000","reason":"invoice voided"}` |
-| till issues KANO-mwaj4oe6-E, due in 15 s | [5EW8nveE](https://testnet.nearblocks.io/txns/5EW8nveEZmjQqqxJ7cb3Pvk6rqrAEB74g8yFxxWgaxyL) | `invoice_created {"id":"KANO-mwaj4oe6-E","shop":"shop.rajistapay-demo.testnet","amount":"2000000"}` |
-| wallet pays after the due time → refunded | [CCf2ogDu](https://testnet.nearblocks.io/txns/CCf2ogDu37yqctvc7rvvoMva4ZtgKSmKND8NG9HYmWdR) | `payment_rejected {"id":"KANO-mwaj4oe6-E","payer":"customer.rajistapay-demo.testnet","amount":"2000000","reason":"invoice expired"}` |
-| till issues KANO-mwaj4oe6-B: 7.25 USDC | [GmfDLzok](https://testnet.nearblocks.io/txns/GmfDLzokVskedVra8ca5FpQgkAG2Bd7kdpEzFep62W5x) | `invoice_created {"id":"KANO-mwaj4oe6-B","shop":"shop.rajistapay-demo.testnet","amount":"7250000"}` |
-| router delivers 7.25 → paid | [FZhB9gkq](https://testnet.nearblocks.io/txns/FZhB9gkqyJ6qqLW7j8S2KdNnuiZhsJMGpDFDjYgueDDV) | `invoice_paid {"id":"KANO-mwaj4oe6-B","shop":"shop.rajistapay-demo.testnet","payer":"router.rajistapay-demo.testnet","amount":"7250000","refunded":"0","extra":"0","late":false}` |
-| router delivers 7.25 again → held for the shop as extra | [BDzPhzU6](https://testnet.nearblocks.io/txns/BDzPhzU62kDkvv3oRuVijjrFv4BgRCFR2hpAxZNLo3Z7) | `payment_held {"id":"KANO-mwaj4oe6-B","shop":"shop.rajistapay-demo.testnet","amount":"7250000","reason":"already paid"}` |
-| till issues KANO-mwaj4oe6-L, due in 15 s | [HRcu54e7](https://testnet.nearblocks.io/txns/HRcu54e7SQnKomxW6715cmaSm6E2gZFwmRxA8c66RLCd) | `invoice_created {"id":"KANO-mwaj4oe6-L","shop":"shop.rajistapay-demo.testnet","amount":"1000000"}` |
-| router delivers after the due time → paid, marked late | [C4bpRMZB](https://testnet.nearblocks.io/txns/C4bpRMZB9uiTy2ezc9xKSFp3CG1c8PaKZmCw3qw73zqP) | `invoice_paid {"id":"KANO-mwaj4oe6-L","shop":"shop.rajistapay-demo.testnet","payer":"router.rajistapay-demo.testnet","amount":"1000000","refunded":"0","extra":"0","late":true}` |
-| router delivers to an id that never existed → unclaimed | [HKfdH3Zk](https://testnet.nearblocks.io/txns/HKfdH3ZkkXDce1NxAH54kR4MFviauGmCxQMZVNkCsYSr) | `payment_unclaimed {"id":"KANO-mwaj4oe6-ghost","amount":"500000"}` |
-| owner returns the unclaimed 0.50 | [DtKihDge](https://testnet.nearblocks.io/txns/DtKihDgeK2JCvsPDtXRgyT6zGErWaq2o9CXr5E9EYQCj) | `unclaimed_returned {"to":"router.rajistapay-demo.testnet","amount":"500000","reason":"demo: payer proved origin tx"}` |
-| shop withdraws its USDC | [SaWE79yL](https://testnet.nearblocks.io/txns/SaWE79yLVuarFvCLjZL3NTMTG5yFBvh7oa2HzTzVMVw) | `withdrawn {"shop":"shop.rajistapay-demo.testnet","amount":"28000000"}` |
+| deploy Rajista Pay | [7fam6cgj](https://testnet.nearblocks.io/txns/7fam6cgjX5tf7jwHzndEEc43BpYmisFDspr2uEvbUtFF) |  |
+| init Rajista Pay (router = stand-in for intents.near) | [CWhvJxAX](https://testnet.nearblocks.io/txns/CWhvJxAXbsiQ8sD3WLm361sPZXbdTuFQyffBtMmkQB5F) |  |
+| customer mints 40 test USDC | [Fr8otUyz](https://testnet.nearblocks.io/txns/Fr8otUyzM241s24mUSoXk2HZgupcepHS5FeWQfPJh6fp) |  |
+| router mints 40 test USDC | [8eYD9eQw](https://testnet.nearblocks.io/txns/8eYD9eQw8XPobN5PEcQFaELHofTm2v63se1LScfXzw5B) |  |
+| shop prepays 0.05 NEAR of invoice storage | [8B7EGhdF](https://testnet.nearblocks.io/txns/8B7EGhdFJaPg5j1c99J9j8nj1RTVV2rDiNL5VZmGNvCV) |  |
+| shop adds a till key (create/void invoices only) | [68fpTJkT](https://testnet.nearblocks.io/txns/68fpTJkT6vxX5HP5c2xhwRLmoxbPtAumTovWVccwQ3o8) |  |
+| till issues KANO-mwc07pyr-A: 12.50 USDC, no wallet prompt | [DyKoLL8V](https://testnet.nearblocks.io/txns/DyKoLL8VAGmR663fovrkeNmnk3uEsPJmxhdpHTUHfigG) | `invoice_created {"id":"KANO-mwc07pyr-A","shop":"shop.rajistapay-demo.testnet","amount":"12500000"}` |
+| wallet pays 10.00 (short) → refunded | [DajAKtfW](https://testnet.nearblocks.io/txns/DajAKtfWusLEjCbk1PHjBDWdg8jDEzcoqXJUdYq8Y9ca) | `payment_rejected {"id":"KANO-mwc07pyr-A","payer":"customer.rajistapay-demo.testnet","amount":"10000000","reason":"short payment"}` |
+| wallet pays 13.00 → paid, 0.50 change returned | [23UUcy3f](https://testnet.nearblocks.io/txns/23UUcy3fsF3NFrAPtPPPyhf7md7asVrsLRyzEucuGg9g) | `invoice_paid {"id":"KANO-mwc07pyr-A","shop":"shop.rajistapay-demo.testnet","payer":"customer.rajistapay-demo.testnet","amount":"12500000","refunded":"500000","extra":"0","late":false}` |
+| wallet pays the same invoice again → refunded | [6VKFsWJ4](https://testnet.nearblocks.io/txns/6VKFsWJ43Jr7vsUwiSXdQCkQn7Giiimmy6Z5RJdfbrCN) | `payment_rejected {"id":"KANO-mwc07pyr-A","payer":"customer.rajistapay-demo.testnet","amount":"12500000","reason":"already paid"}` |
+| wallet pays an unknown invoice → refunded | [BFigdrUU](https://testnet.nearblocks.io/txns/BFigdrUUVJwAXSW4LsQBujfCbFnHGDh7ZtGupFWpk7qt) | `payment_rejected {"id":"KANO-mwc07pyr-nope","payer":"customer.rajistapay-demo.testnet","amount":"5000000","reason":"unknown invoice"}` |
+| till issues KANO-mwc07pyr-V | [GSCGrdiF](https://testnet.nearblocks.io/txns/GSCGrdiFKTjvVoQaYo3g2n3JYQ3WtX8vtukkcayncu1) | `invoice_created {"id":"KANO-mwc07pyr-V","shop":"shop.rajistapay-demo.testnet","amount":"3000000"}` |
+| till voids KANO-mwc07pyr-V | [GM8PPmWe](https://testnet.nearblocks.io/txns/GM8PPmWepmWuAc7EgvvbWvSfVZeDcDuDwVGYZVrtyrz3) | `invoice_voided {"id":"KANO-mwc07pyr-V"}` |
+| wallet pays the voided invoice → refunded | [EPDQDcNq](https://testnet.nearblocks.io/txns/EPDQDcNqBR6djb7E4K9PFmhkJJR4KCvGyUm9bwo7GYRL) | `payment_rejected {"id":"KANO-mwc07pyr-V","payer":"customer.rajistapay-demo.testnet","amount":"3000000","reason":"invoice voided"}` |
+| till issues KANO-mwc07pyr-E, due in 15 s | [HimjCJwS](https://testnet.nearblocks.io/txns/HimjCJwSng5D3sLdaUd2QF7FrLbribD5d8VopFWgbiz6) | `invoice_created {"id":"KANO-mwc07pyr-E","shop":"shop.rajistapay-demo.testnet","amount":"2000000"}` |
+| wallet pays after the due time → refunded | [HxF9qohr](https://testnet.nearblocks.io/txns/HxF9qohrKjZAW92bcFFGj73io3HBgdQEzsFP323bjsQA) | `payment_rejected {"id":"KANO-mwc07pyr-E","payer":"customer.rajistapay-demo.testnet","amount":"2000000","reason":"invoice expired"}` |
+| till issues KANO-mwc07pyr-B: 7.25 USDC | [9hzjXamB](https://testnet.nearblocks.io/txns/9hzjXamBWv3LFy1g3y2P5MgqHGsdyAT6h2r4eWoMfnNH) | `invoice_created {"id":"KANO-mwc07pyr-B","shop":"shop.rajistapay-demo.testnet","amount":"7250000"}` |
+| router delivers 7.25 → paid | [Bk5FXhjN](https://testnet.nearblocks.io/txns/Bk5FXhjNCCxSppkxbCpdD6gFWXcQwhC3t1EfpYeMt9bZ) | `invoice_paid {"id":"KANO-mwc07pyr-B","shop":"shop.rajistapay-demo.testnet","payer":"router.rajistapay-demo.testnet","amount":"7250000","refunded":"0","extra":"0","late":false}` |
+| router delivers 7.25 again → held for the shop as extra | [5n3gi6df](https://testnet.nearblocks.io/txns/5n3gi6dfngqmLNGwX4ZW299Rwe7LSVA2ScwT1B4WYDkR) | `payment_held {"id":"KANO-mwc07pyr-B","shop":"shop.rajistapay-demo.testnet","amount":"7250000","reason":"already paid"}` |
+| till issues KANO-mwc07pyr-L, due in 15 s | [EjGVPizJ](https://testnet.nearblocks.io/txns/EjGVPizJpxqeDdFDPBB1LL9EZVyrZXmarbJbESrN2dvr) | `invoice_created {"id":"KANO-mwc07pyr-L","shop":"shop.rajistapay-demo.testnet","amount":"1000000"}` |
+| router delivers after the due time → paid, marked late | [AUkseduQ](https://testnet.nearblocks.io/txns/AUkseduQZBpAPL3Jp9CyFndMDbmeL6ExNDkbnZNx5CZL) | `invoice_paid {"id":"KANO-mwc07pyr-L","shop":"shop.rajistapay-demo.testnet","payer":"router.rajistapay-demo.testnet","amount":"1000000","refunded":"0","extra":"0","late":true}` |
+| router delivers to an id that never existed → unclaimed | [2DyjBpKj](https://testnet.nearblocks.io/txns/2DyjBpKji9Yt1JxbhavxBFPuUMWgW67YF9AryBiYFYFS) | `payment_unclaimed {"id":"KANO-mwc07pyr-ghost","amount":"500000"}` |
+| owner returns the unclaimed 0.50 | [4boCn45i](https://testnet.nearblocks.io/txns/4boCn45iwZnP1kMg8WqSJGFntE7rAqoYQX2wtZkS4Lf1) | `unclaimed_returned {"to":"router.rajistapay-demo.testnet","amount":"500000","reason":"demo: payer proved origin tx"}` |
+| shop withdraws its USDC | [BK8q79ah](https://testnet.nearblocks.io/txns/BK8q79ahsTbmzHXjFDufT1rqtq3g7amQLCBFuGbYFZAM) | `withdrawn {"shop":"shop.rajistapay-demo.testnet","amount":"28000000"}` |
 
 ## Checks
 

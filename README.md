@@ -53,7 +53,7 @@ Every step of the same flow, including every rejection path, is on testnet with 
 
 ## The contract decides, not the server
 
-`contract/src/lib.rs`, 27 unit tests (`npm test`, runs in WSL or Linux).
+`contract/src/lib.rs` + `json.rs` + `abi.rs`, 36 unit tests (`npm test`, runs in WSL or Linux).
 
 | Payment | From a NEAR wallet | Through NEAR Intents (`intents.near`) |
 |---|---|---|
@@ -99,6 +99,7 @@ npm run build && npx wrangler dev        # app + API on http://localhost:8787
 bash scripts/test.sh                     # contract tests
 bash scripts/build.sh                    # rebuild res/*.wasm
 node scripts/testnet-e2e.mjs --fresh     # full testnet run (needs a funded key in .keys/)
+node scripts/testnet-guards.mjs          # calls the contract must refuse, with their messages
 ```
 
 ## Prior work and what is new

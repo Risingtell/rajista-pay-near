@@ -21,7 +21,7 @@ if (step === "key") {
   }
   const { public_key } = JSON.parse(readFileSync(file, "utf8"));
   console.log(`deploy key: ${public_key}`);
-  console.log(`open: http://127.0.0.1:8791/admin?pk=${encodeURIComponent(public_key)}&near=2.14`);
+  console.log(`open: http://127.0.0.1:8791/admin?pk=${encodeURIComponent(public_key)}&near=0.97`);
 } else if (step === "deploy") {
   const { private_key } = JSON.parse(readFileSync(file, "utf8"));
   const acct = new Account(n.contract, provider, private_key);

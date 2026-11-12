@@ -26,14 +26,15 @@
 //! a till can create invoices with a function-call key (which cannot attach NEAR) and no wallet
 //! prompt per sale.
 
-use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
+pub mod json;
+#[cfg(target_arch = "wasm32")]
+mod abi;
+
+use json::Obj;
+use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::{Base64VecU8, U128, U64};
-use near_sdk::serde_json::json;
 use near_sdk::store::LookupMap;
-use near_sdk::{
-    env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise,
-    PromiseOrValue, PromiseResult,
-};
+use near_sdk::{env, require, AccountId, BorshStorageKey, Gas, NearToken, Promise, PromiseResult};
 
 const EVENT_STANDARD: &str = "rajista_pay";
 const EVENT_VERSION: &str = "1.0.0";
@@ -45,13 +46,8 @@ const GAS_CALLBACK: Gas = Gas::from_tgas(10);
 /// charged when the invoice is created so the contract never pays for a shop's storage.
 const PAYMENT_RESERVE_BYTES: u64 = 80;
 
-#[ext_contract(ext_ft)]
-pub trait FungibleToken {
-    fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
-}
-
-#[derive(BorshStorageKey)]
-#[near]
+#[derive(BorshStorageKey, BorshSerialize)]
+#[borsh(crate = "near_sdk::borsh")]
 enum StorageKey {
     Invoices,
     ShopIndex,
@@ -60,16 +56,16 @@ enum StorageKey {
     StorageCredit,
 }
 
-#[near(serializers = [borsh, json])]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq)]
+#[borsh(crate = "near_sdk::borsh")]
 pub enum Status {
     Open,
     Paid,
     Void,
 }
 
-#[near(serializers = [borsh, json])]
-#[derive(Clone, Debug)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
+#[borsh(crate = "near_sdk::borsh")]
 pub struct Invoice {
     pub id: String,
     pub shop: AccountId,
@@ -91,26 +87,118 @@ pub struct Invoice {
     pub extra: U128,
 }
 
-#[near(contract_state)]
-#[derive(PanicOnDefault)]
+#[derive(BorshSerialize, BorshDeserialize)]
+#[borsh(crate = "near_sdk::borsh")]
 pub struct Contract {
     owner: AccountId,
     usdc: AccountId,
     router: Option<AccountId>,
     invoices: LookupMap<String, Invoice>,
-    /// "<shop>#<n>" -> invoice id, so issuing costs the same however many invoices a shop has.
-    shop_index: LookupMap<String, String>,
+    /// (shop, n) -> invoice id, so issuing costs the same however many invoices a shop has.
+    shop_index: LookupMap<(AccountId, u32), String>,
     shop_count: LookupMap<AccountId, u32>,
     balances: LookupMap<AccountId, u128>,
     storage_credit: LookupMap<AccountId, u128>,
     unclaimed: u128,
 }
 
-fn emit(event: &str, data: near_sdk::serde_json::Value) {
-    env::log_str(&format!(
-        "EVENT_JSON:{}",
-        json!({"standard": EVENT_STANDARD, "version": EVENT_VERSION, "event": event, "data": [data]})
-    ));
+/// Event payload; only the fields that are set are written.
+#[derive(Default)]
+struct Ev<'a> {
+    id: Option<&'a str>,
+    shop: Option<&'a AccountId>,
+    payer: Option<&'a AccountId>,
+    to: Option<&'a AccountId>,
+    amount: Option<U128>,
+    refunded: Option<U128>,
+    extra: Option<U128>,
+    late: Option<bool>,
+    reason: Option<&'a str>,
+}
+
+/// NEP-297 event log.
+fn emit(event: &str, d: Ev) {
+    let mut o = Obj::new();
+    if let Some(v) = d.id {
+        o = o.s("id", v);
+    }
+    if let Some(v) = d.shop {
+        o = o.s("shop", v.as_str());
+    }
+    if let Some(v) = d.payer {
+        o = o.s("payer", v.as_str());
+    }
+    if let Some(v) = d.to {
+        o = o.s("to", v.as_str());
+    }
+    if let Some(v) = d.amount {
+        o = o.q("amount", v.0);
+    }
+    if let Some(v) = d.refunded {
+        o = o.q("refunded", v.0);
+    }
+    if let Some(v) = d.extra {
+        o = o.q("extra", v.0);
+    }
+    if let Some(v) = d.late {
+        o = o.b("late", v);
+    }
+    if let Some(v) = d.reason {
+        o = o.s("reason", v);
+    }
+    let body = o.end();
+    let mut s = String::with_capacity(96 + body.len());
+    s.push_str("EVENT_JSON:{\"standard\":\"");
+    s.push_str(EVENT_STANDARD);
+    s.push_str("\",\"version\":\"");
+    s.push_str(EVENT_VERSION);
+    s.push_str("\",\"event\":\"");
+    s.push_str(event);
+    s.push_str("\",\"data\":[");
+    s.push_str(&body);
+    s.push_str("]}");
+    env::log_str(&s);
+}
+
+pub struct Config {
+    pub owner: AccountId,
+    pub usdc: AccountId,
+    pub router: Option<AccountId>,
+    pub unclaimed: U128,
+}
+
+impl Config {
+    pub fn to_json(&self) -> String {
+        Obj::new()
+            .s("owner", self.owner.as_str())
+            .s("usdc", self.usdc.as_str())
+            .opt_s("router", self.router.as_ref().map(|r| r.as_str()))
+            .q("unclaimed", self.unclaimed.0)
+            .end()
+    }
+}
+
+impl Invoice {
+    pub fn to_json(&self) -> String {
+        Obj::new()
+            .s("id", &self.id)
+            .s("shop", self.shop.as_str())
+            .q("amount", self.amount.0)
+            .q("due_ms", self.due_ms.0 as u128)
+            .s("items_hash", &json::base64_encode(&self.items_hash.0))
+            .s("note", &self.note)
+            .s("status", match self.status {
+                Status::Open => "Open",
+                Status::Paid => "Paid",
+                Status::Void => "Void",
+            })
+            .q("created_ms", self.created_ms.0 as u128)
+            .opt_q("paid_ms", self.paid_ms.map(|v| v.0 as u128))
+            .opt_s("payer", self.payer.as_ref().map(|p| p.as_str()))
+            .b("late", self.late)
+            .q("extra", self.extra.0)
+            .end()
+    }
 }
 
 fn now_ms() -> u64 {
@@ -121,11 +209,16 @@ fn zero() -> NearToken {
     NearToken::from_yoctonear(0)
 }
 
-#[near]
+fn callback(method: &str, args: String) -> Promise {
+    Promise::new(env::current_account_id()).function_call(method, args.into_bytes(), zero(), GAS_CALLBACK)
+}
+
+/// The methods below are the contract's logic. `abi.rs` exposes them to NEAR: it reads the JSON
+/// arguments, applies the deposit and caller checks noted on each method, and writes the result.
 impl Contract {
     /// `usdc`: the only token that can pay. `router`: the account that delivers cross-chain
     /// payments (`intents.near` on mainnet); its payments are never refunded, see the module docs.
-    #[init]
+    /// Init, once. No deposit.
     pub fn new(usdc: AccountId, router: Option<AccountId>) -> Self {
         Self {
             owner: env::predecessor_account_id(),
@@ -144,8 +237,7 @@ impl Contract {
     /// expiry), so a till with a wrong clock cannot set a wrong due time. Storage is paid from the
     /// attached NEAR (the rest is returned) or, when nothing is attached, from the shop's prepaid
     /// storage credit. Everything the invoice adds to state is charged, including the shop's
-    /// balance entry, so a later payment never makes the contract pay for storage.
-    #[payable]
+    /// balance entry, so a later payment never makes the contract pay for storage. Payable.
     pub fn create_invoice(&mut self, id: String, amount: U128, due_in_ms: U64, items_hash: Base64VecU8, note: String) {
         let shop = env::predecessor_account_id();
         require!(!id.is_empty() && id.len() <= MAX_ID_LEN, "id must be 1-64 characters");
@@ -174,7 +266,7 @@ impl Contract {
         };
         self.invoices.insert(id.clone(), invoice);
         let n = self.shop_count.get(&shop).copied().unwrap_or(0);
-        self.shop_index.insert(format!("{shop}#{n}"), id.clone());
+        self.shop_index.insert((shop.clone(), n), id.clone());
         self.shop_count.insert(shop.clone(), n + 1);
         if !self.balances.contains_key(&shop) {
             self.balances.insert(shop.clone(), 0);
@@ -187,7 +279,7 @@ impl Contract {
         let cost = env::storage_byte_cost().saturating_mul(used);
         let attached = env::attached_deposit();
         if attached > zero() {
-            require!(attached >= cost, format!("attach at least {} yoctoNEAR for storage", cost.as_yoctonear()));
+            require!(attached >= cost, "attached NEAR does not cover the invoice storage");
             let refund = attached.saturating_sub(cost);
             if refund > zero() {
                 Promise::new(shop.clone()).transfer(refund).detach();
@@ -197,22 +289,21 @@ impl Contract {
             require!(credit >= cost.as_yoctonear(), "storage credit too low: call storage_deposit or attach NEAR");
             self.storage_credit.insert(shop.clone(), credit - cost.as_yoctonear());
         }
-        emit("invoice_created", json!({"id": id, "shop": shop, "amount": amount}));
+        emit("invoice_created", Ev { id: Some(&id), shop: Some(&shop), amount: Some(amount), ..Default::default() });
     }
 
-    /// Only the shop can void, and only an open invoice.
+    /// Only the shop can void, and only an open invoice. No deposit.
     pub fn void_invoice(&mut self, id: String) {
         let caller = env::predecessor_account_id();
         let invoice = self.invoices.get_mut(&id).unwrap_or_else(|| env::panic_str("no such invoice"));
         require!(invoice.shop == caller, "only the shop that issued the invoice can void it");
         require!(invoice.status == Status::Open, "only an open invoice can be voided");
         invoice.status = Status::Void;
-        emit("invoice_voided", json!({"id": id}));
+        emit("invoice_voided", Ev { id: Some(&id), ..Default::default() });
     }
 
     /// Prepay storage so a till can issue invoices without attaching NEAR. Credits the caller,
-    /// or `shop` if given.
-    #[payable]
+    /// or `shop` if given. Payable.
     pub fn storage_deposit(&mut self, shop: Option<AccountId>) -> U128 {
         let shop = shop.unwrap_or_else(env::predecessor_account_id);
         let amount = env::attached_deposit().as_yoctonear();
@@ -222,14 +313,13 @@ impl Contract {
         self.storage_credit.flush();
         // A new entry is paid for out of the deposit itself.
         let entry_cost = env::storage_byte_cost().as_yoctonear() * env::storage_usage().saturating_sub(before) as u128;
-        require!(amount > entry_cost, format!("attach more than {entry_cost} yoctoNEAR"));
+        require!(amount > entry_cost, "deposit does not cover the storage entry");
         let credit = old.unwrap_or(0) + amount - entry_cost;
         self.storage_credit.insert(shop, credit);
         U128(credit)
     }
 
     /// Return unused storage credit to the shop. Needs 1 yoctoNEAR (wallet confirmation).
-    #[payable]
     pub fn storage_withdraw(&mut self, amount: Option<U128>) -> U128 {
         near_sdk::assert_one_yocto();
         let shop = env::predecessor_account_id();
@@ -242,7 +332,6 @@ impl Contract {
     }
 
     /// The shop withdraws its USDC. Needs 1 yoctoNEAR (wallet confirmation).
-    #[payable]
     pub fn withdraw(&mut self, amount: Option<U128>) -> Promise {
         near_sdk::assert_one_yocto();
         let shop = env::predecessor_account_id();
@@ -250,40 +339,38 @@ impl Contract {
         let take = amount.map(|a| a.0).unwrap_or(balance);
         require!(take > 0 && take <= balance, "nothing to withdraw, or more than the balance");
         self.balances.insert(shop.clone(), balance - take);
-        self.send_usdc(shop.clone(), take, "Rajista Pay withdrawal")
-            .then(Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).after_withdraw(shop, U128(take)))
+        let args = Obj::new().s("shop", shop.as_str()).q("amount", take).end();
+        self.send_usdc(shop, take, "Rajista Pay withdrawal").then(callback("after_withdraw", args))
     }
 
-    /// If the token transfer failed, the money goes back on the shop's balance.
-    #[private]
+    /// If the token transfer failed, the money goes back on the shop's balance. Private callback.
     pub fn after_withdraw(&mut self, shop: AccountId, amount: U128) -> bool {
         let ok = matches!(env::promise_result(0), PromiseResult::Successful(_));
         if ok {
-            emit("withdrawn", json!({"shop": shop, "amount": amount}));
+            emit("withdrawn", Ev { shop: Some(&shop), amount: Some(amount), ..Default::default() });
         } else {
             let balance = self.balances.get(&shop).copied().unwrap_or(0);
             self.balances.insert(shop.clone(), balance + amount.0);
-            emit("withdraw_failed", json!({"shop": shop, "amount": amount}));
+            emit("withdraw_failed", Ev { shop: Some(&shop), amount: Some(amount), ..Default::default() });
         }
         ok
     }
 
     /// Owner only: return router money that named an invoice id which never existed.
-    #[payable]
     pub fn return_unclaimed(&mut self, receiver_id: AccountId, amount: U128, reason: String) -> Promise {
         near_sdk::assert_one_yocto();
         require!(env::predecessor_account_id() == self.owner, "only the owner can return unclaimed money");
         require!(amount.0 > 0 && amount.0 <= self.unclaimed, "more than the unclaimed total");
         self.unclaimed -= amount.0;
-        self.send_usdc(receiver_id.clone(), amount.0, "Rajista Pay refund")
-            .then(Self::ext(env::current_account_id()).with_static_gas(GAS_CALLBACK).after_return(receiver_id, amount, reason))
+        let args = Obj::new().s("receiver_id", receiver_id.as_str()).q("amount", amount.0).s("reason", &reason).end();
+        self.send_usdc(receiver_id, amount.0, "Rajista Pay refund").then(callback("after_return", args))
     }
 
-    #[private]
+    /// Private callback.
     pub fn after_return(&mut self, receiver_id: AccountId, amount: U128, reason: String) -> bool {
         let ok = matches!(env::promise_result(0), PromiseResult::Successful(_));
         if ok {
-            emit("unclaimed_returned", json!({"to": receiver_id, "amount": amount, "reason": reason}));
+            emit("unclaimed_returned", Ev { to: Some(&receiver_id), amount: Some(amount), reason: Some(&reason), ..Default::default() });
         } else {
             self.unclaimed += amount.0;
         }
@@ -291,10 +378,8 @@ impl Contract {
     }
 
     fn send_usdc(&self, to: AccountId, amount: u128, memo: &str) -> Promise {
-        ext_ft::ext(self.usdc.clone())
-            .with_attached_deposit(NearToken::from_yoctonear(1))
-            .with_static_gas(GAS_FT_TRANSFER)
-            .ft_transfer(to, U128(amount), Some(memo.into()))
+        let args = Obj::new().s("receiver_id", to.as_str()).q("amount", amount).s("memo", memo).end();
+        Promise::new(self.usdc.clone()).function_call("ft_transfer", args.into_bytes(), NearToken::from_yoctonear(1), GAS_FT_TRANSFER)
     }
 
     fn credit(&mut self, shop: &AccountId, amount: u128) {
@@ -314,7 +399,7 @@ impl Contract {
         let from = from_index.unwrap_or(0).min(count);
         let to = from.saturating_add(limit.unwrap_or(50).min(100)).min(count);
         (from..to)
-            .filter_map(|i| self.shop_index.get(&format!("{shop}#{i}")))
+            .filter_map(|i| self.shop_index.get(&(shop.clone(), i)))
             .filter_map(|id| self.invoices.get(id).cloned())
             .collect()
     }
@@ -331,16 +416,13 @@ impl Contract {
         U128(self.storage_credit.get(&shop).copied().unwrap_or(0))
     }
 
-    pub fn get_config(&self) -> near_sdk::serde_json::Value {
-        json!({"owner": self.owner, "usdc": self.usdc, "router": self.router, "unclaimed": U128(self.unclaimed)})
+    pub fn get_config(&self) -> Config {
+        Config { owner: self.owner.clone(), usdc: self.usdc.clone(), router: self.router.clone(), unclaimed: U128(self.unclaimed) }
     }
-}
 
-#[near]
-impl FungibleTokenReceiver for Contract {
-    /// Settles an invoice. Returns the amount to refund to the sender (NEP-141). Router payments
+    /// NEP-141 receiver (no deposit). Settles an invoice. Returns the amount to refund to the sender (NEP-141). Router payments
     /// always return zero: they settle the invoice or are held, never sent back.
-    fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> PromiseOrValue<U128> {
+    pub fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> U128 {
         require!(env::predecessor_account_id() == self.usdc, "only the configured USDC contract can pay");
         let via_router = self.router.as_ref() == Some(&sender_id);
         let id = msg.trim().to_string();
@@ -349,11 +431,11 @@ impl FungibleTokenReceiver for Contract {
         let Some(invoice) = self.invoices.get_mut(&id) else {
             if via_router {
                 self.unclaimed += amount.0;
-                emit("payment_unclaimed", json!({"id": id, "amount": amount}));
-                return PromiseOrValue::Value(U128(0));
+                emit("payment_unclaimed", Ev { id: Some(&id), amount: Some(amount), ..Default::default() });
+                return U128(0);
             }
-            emit("payment_rejected", json!({"id": id, "payer": sender_id, "amount": amount, "reason": "unknown invoice"}));
-            return PromiseOrValue::Value(amount);
+            emit("payment_rejected", Ev { id: Some(&id), payer: Some(&sender_id), amount: Some(amount), reason: Some("unknown invoice"), ..Default::default() });
+            return amount;
         };
 
         let expired = invoice.due_ms.0 != 0 && now > invoice.due_ms.0;
@@ -368,13 +450,13 @@ impl FungibleTokenReceiver for Contract {
 
         if let Some(reason) = problem {
             if !via_router {
-                emit("payment_rejected", json!({"id": id, "payer": sender_id, "amount": amount, "reason": reason}));
-                return PromiseOrValue::Value(amount);
+                emit("payment_rejected", Ev { id: Some(&id), payer: Some(&sender_id), amount: Some(amount), reason: Some(reason), ..Default::default() });
+                return amount;
             }
             invoice.extra = U128(invoice.extra.0 + amount.0);
             self.credit(&shop, amount.0);
-            emit("payment_held", json!({"id": id, "shop": shop, "amount": amount, "reason": reason}));
-            return PromiseOrValue::Value(U128(0));
+            emit("payment_held", Ev { id: Some(&id), shop: Some(&shop), amount: Some(amount), reason: Some(reason), ..Default::default() });
+            return U128(0);
         }
 
         let due = invoice.amount.0;
@@ -392,9 +474,18 @@ impl FungibleTokenReceiver for Contract {
         self.credit(&shop, credited);
         emit(
             "invoice_paid",
-            json!({"id": id, "shop": shop, "payer": sender_id, "amount": U128(due), "refunded": U128(refund), "extra": U128(if via_router { over } else { 0 }), "late": expired}),
+            Ev {
+                id: Some(&id),
+                shop: Some(&shop),
+                payer: Some(&sender_id),
+                amount: Some(U128(due)),
+                refunded: Some(U128(refund)),
+                extra: Some(U128(if via_router { over } else { 0 })),
+                late: Some(expired),
+                ..Default::default()
+            },
         );
-        PromiseOrValue::Value(U128(refund))
+        U128(refund)
     }
 }
 
@@ -445,10 +536,7 @@ mod tests {
 
     fn pay_as(c: &mut Contract, from_token: AccountId, sender: AccountId, id: &str, amount: u128, now: u64) -> u128 {
         ctx(from_token, 0, now);
-        match c.ft_on_transfer(sender, U128(amount), id.into()) {
-            PromiseOrValue::Value(v) => v.0,
-            PromiseOrValue::Promise(_) => panic!("unexpected promise"),
-        }
+        c.ft_on_transfer(sender, U128(amount), id.into()).0
     }
 
     fn pay(c: &mut Contract, from_token: AccountId, id: &str, amount: u128, now: u64) -> u128 {
@@ -584,10 +672,10 @@ mod tests {
     fn routed_payment_to_an_unknown_id_is_unclaimed_and_only_the_owner_can_return_it() {
         let mut c = setup();
         assert_eq!(routed(&mut c, "NOPE", 7, 2_000), 0);
-        assert_eq!(c.get_config()["unclaimed"], "7");
+        assert_eq!(c.get_config().unclaimed.0, 7);
         ctx(owner(), 1, 3_000);
         let _ = c.return_unclaimed(customer(), U128(7), "proved by origin tx".into());
-        assert_eq!(c.get_config()["unclaimed"], "0");
+        assert_eq!(c.get_config().unclaimed.0, 0);
     }
 
     #[test]
@@ -656,7 +744,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "attach at least")]
+    #[should_panic(expected = "does not cover the invoice storage")]
     fn attaching_too_little_fails() {
         let mut c = setup();
         ctx(shop(), 1, 1_000);
@@ -726,7 +814,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "attach more than")]
+    #[should_panic(expected = "does not cover the storage entry")]
     fn storage_deposit_pays_for_its_own_entry() {
         let mut c = setup();
         ctx(customer(), 1, 1_000);
