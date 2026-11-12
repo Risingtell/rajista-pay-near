@@ -6,7 +6,7 @@ Polygon, Optimism, Avalanche or NEAR. NEAR Intents converts it, and an invoice c
 decides whether the payment settles the invoice. The shop receives USDC on NEAR and exports a CSV
 for its books.
 
-**Track:** Real-World Money · **Live app:** [rajista-pay.rajista.workers.dev](https://rajista-pay.rajista.workers.dev) · **Contract:** `pay.risingtell.near` (mainnet), `pay.rajistapay-demo.testnet` (testnet)
+**Track:** Real-World Money · **Live app:** [rajista-pay.rajista.workers.dev](https://rajista-pay.rajista.workers.dev) · **Contract:** `rajistapay.near` (mainnet), `pay.rajistapay-demo.testnet` (testnet)
 
 ## Try it in two minutes (free, test network)
 

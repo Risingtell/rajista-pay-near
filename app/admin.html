@@ -3,49 +3,120 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Create contract account · Rajista Pay</title>
+  <title>Live setup · Rajista Pay</title>
   <link rel="icon" href="/mark.svg">
   <link rel="stylesheet" href="/src/styles.css">
 </head>
 <body>
   <main class="wrap narrow stack" style="padding-top:28px">
-    <h1>Create the live contract account</h1>
+    <h1>Live setup</h1>
+    <div class="small" id="bal"></div>
+
     <div class="card stack">
-      <p>Your wallet signs one transaction that creates <b class="mono" id="acct"></b>, sends it <b id="amt"></b> NEAR, and adds the deploy key whose public half is below. The NEAR stays in that account as contract storage.</p>
+      <h2 style="margin:0">1. Move NEAR to <span class="mono wallet"></span></h2>
+      <p class="small muted">Connect the account that holds the NEAR (<span class="mono" id="from"></span>). Your wallet signs one transfer of everything except 0.002 NEAR.</p>
+      <button id="move" class="wide">Connect that account and move the NEAR</button>
+      <div id="out1" class="small"></div>
+    </div>
+
+    <div class="card stack">
+      <h2 style="margin:0">2. Create <span class="mono contract"></span></h2>
+      <p class="small muted">Connect <span class="mono wallet"></span>. Your wallet makes one call to the <span class="mono">near</span> account's <span class="mono">create_account</span>, the same call wallets use to create names. It creates <span class="mono contract"></span> with <b id="amt"></b> NEAR (contract storage) and the deploy key below, which stays on this computer and is deleted once the contract is set up. If the name cannot be created, the NEAR comes back.</p>
       <div class="small"><span class="label-up">Deploy key (public)</span><div class="mono" id="pk"></div></div>
-      <button id="go" class="wide">Connect wallet and create</button>
-      <div id="out" class="small"></div>
+      <button id="create" class="wide">Connect and create</button>
+      <div id="out2" class="small"></div>
+    </div>
+
+    <div class="card stack">
+      <h2 style="margin:0">3. Start the contract</h2>
+      <p class="small muted">After the code is deployed. Connect <span class="mono wallet"></span>. Your wallet calls <span class="mono">new</span> on <span class="mono contract"></span>, which makes your wallet the contract's owner (it can only ever return payments sent to invoice ids that never existed).</p>
+      <div class="small" id="code"></div>
+      <button id="start" class="wide" disabled>Connect and start</button>
+      <div id="out3" class="small"></div>
     </div>
   </main>
   <script type="module">
     import { NETWORKS } from "/src/config.js";
-    import { connect, send, assertOk } from "/src/wallet.js";
-    import { accountExists } from "/src/chain.js";
+    import { connect, disconnect, send, assertOk } from "/src/wallet.js";
+    import { accountExists, nearBalance, view } from "/src/chain.js";
     const n = NETWORKS.mainnet;
     const q = new URLSearchParams(location.search);
-    const pk = q.get("pk") ?? "", amount = q.get("near") ?? "0.97";
-    const parent = n.contract.split(".").slice(1).join(".");
-    document.getElementById("acct").textContent = n.contract;
-    document.getElementById("amt").textContent = amount;
-    document.getElementById("pk").textContent = pk || "missing ?pk=";
-    document.getElementById("go").onclick = async () => {
-      const out = document.getElementById("out");
+    const WALLET = q.get("wallet") ?? "risingtell.near";
+    const from = q.get("from") ?? "", pk = q.get("pk") ?? "", amount = q.get("near") ?? "0.98";
+    const $ = id => document.getElementById(id);
+    const yocto = s => { const [w, f = ""] = s.split("."); return BigInt(w) * 10n ** 24n + BigInt((f + "0".repeat(24)).slice(0, 24)); };
+    const fmt = y => (Number(y / 10n ** 18n) / 1e6).toFixed(6);
+    const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+    document.querySelectorAll(".wallet").forEach(e => (e.textContent = WALLET));
+    document.querySelectorAll(".contract").forEach(e => (e.textContent = n.contract));
+    $("from").textContent = from || "(none)"; $("amt").textContent = amount; $("pk").textContent = pk || "missing ?pk=";
+    const fn = (methodName, args, deposit, tgas) => ({ type: "FunctionCall", params: { methodName, args, gas: String(BigInt(tgas) * 10n ** 12n), deposit: String(deposit) } });
+
+    async function refresh() {
+      const bal = async id => (id ? nearBalance(n, id).catch(() => null) : null);
+      const [a, w, c] = await Promise.all([bal(from), bal(WALLET), bal(n.contract)]);
+      $("bal").innerHTML = `On chain now: ${from ? `${esc(from.slice(0, 8))}… ${a === null ? "-" : fmt(a)} · ` : ""}${esc(WALLET)} ${w === null ? "-" : fmt(w)} · ${esc(n.contract)} ${c === null ? "does not exist yet" : fmt(c)} NEAR`;
+      let deployed = false, started = false;
+      if (c !== null) {
+        const r = await fetch(n.rpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "query", params: { request_type: "view_account", finality: "final", account_id: n.contract } }) }).then(r => r.json());
+        deployed = r.result && r.result.code_hash !== "11111111111111111111111111111111";
+        started = deployed && (await view(n, n.contract, "get_config").then(() => true, () => false));
+        $("code").textContent = !deployed ? "Code not deployed yet." : started ? "Contract is running." : `Code deployed (hash ${r.result.code_hash}). Ready to start.`;
+      }
+      $("start").disabled = !deployed || started;
+      return a;
+    }
+    refresh();
+
+    async function as(who) {
+      await disconnect(n);
+      const acct = await connect(n);
+      if (acct !== who) throw new Error(`Connected ${acct}. Pick ${who} in the wallet.`);
+    }
+
+    $("move").onclick = async () => {
+      const out = $("out1");
+      try {
+        if (!/^[0-9a-f]{64}$/.test(from)) throw new Error("No source account in the link.");
+        await as(from);
+        const bal = await nearBalance(n, from);
+        const keep = 2n * 10n ** 21n;
+        if (bal <= keep) throw new Error("Nothing to move.");
+        const res = assertOk(await send(n, WALLET, [{ type: "Transfer", params: { deposit: String(bal - keep) } }]));
+        out.innerHTML = `<div class="note good">Moved ${fmt(bal - keep)} NEAR. ${esc(res.transaction?.hash ?? "")}</div>`;
+      } catch (e) {
+        out.innerHTML = `<div class="note bad">${esc(e.message ?? e)}</div>`;
+      }
+      refresh();
+    };
+
+    $("create").onclick = async () => {
+      const out = $("out2");
       try {
         if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(pk)) throw new Error("No deploy key in the link.");
         if (await accountExists(n, n.contract)) throw new Error(`${n.contract} already exists.`);
-        const who = await connect(n);
-        if (who !== parent) throw new Error(`Connect ${parent}, not ${who}.`);
-        const [whole, frac = ""] = amount.split(".");
-        const yocto = (BigInt(whole) * 10n ** 24n + BigInt((frac + "0".repeat(24)).slice(0, 24))).toString();
-        const res = assertOk(await send(n, n.contract, [
-          { type: "CreateAccount" },
-          { type: "Transfer", params: { deposit: yocto } },
-          { type: "AddKey", params: { publicKey: pk, accessKey: { permission: "FullAccess" } } },
-        ]));
-        out.innerHTML = `<div class="note good">Created. Transaction ${res.transaction?.hash ?? ""}. Go back to the terminal.</div>`;
+        await as(WALLET);
+        const res = assertOk(await send(n, "near", [fn("create_account", { new_account_id: n.contract, new_public_key: pk }, yocto(amount), 50)]));
+        const ok = await accountExists(n, n.contract);
+        out.innerHTML = ok
+          ? `<div class="note good">${esc(n.contract)} created. ${esc(res.transaction?.hash ?? "")}. Go back to the terminal.</div>`
+          : `<div class="note bad">The call went through but ${esc(n.contract)} does not exist; the NEAR should have come back. ${esc(res.transaction?.hash ?? "")}</div>`;
       } catch (e) {
-        out.innerHTML = `<div class="note bad">${String(e.message ?? e).replace(/</g, "&lt;")}</div>`;
+        out.innerHTML = `<div class="note bad">${esc(e.message ?? e)}</div>`;
       }
+      refresh();
+    };
+
+    $("start").onclick = async () => {
+      const out = $("out3");
+      try {
+        await as(WALLET);
+        const res = assertOk(await send(n, n.contract, [fn("new", { usdc: n.usdc, router: n.router }, 0n, 30)]));
+        out.innerHTML = `<div class="note good">Started. ${esc(res.transaction?.hash ?? "")}. Go back to the terminal.</div>`;
+      } catch (e) {
+        out.innerHTML = `<div class="note bad">${esc(e.message ?? e)}</div>`;
+      }
+      refresh();
     };
   </script>
 </body>
