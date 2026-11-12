@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create contract account · Rajista Pay</title>
+  <link rel="icon" href="/mark.svg">
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <main class="wrap narrow stack" style="padding-top:28px">
+    <h1>Create the live contract account</h1>
+    <div class="card stack">
+      <p>Your wallet signs one transaction that creates <b class="mono" id="acct"></b>, sends it <b id="amt"></b> NEAR, and adds the deploy key whose public half is below. The NEAR stays in that account as contract storage.</p>
+      <div class="small"><span class="label-up">Deploy key (public)</span><div class="mono" id="pk"></div></div>
+      <button id="go" class="wide">Connect wallet and create</button>
+      <div id="out" class="small"></div>
+    </div>
+  </main>
+  <script type="module">
+    import { NETWORKS } from "/src/config.js";
+    import { connect, send, assertOk } from "/src/wallet.js";
+    import { accountExists } from "/src/chain.js";
+    const n = NETWORKS.mainnet;
+    const q = new URLSearchParams(location.search);
+    const pk = q.get("pk") ?? "", amount = q.get("near") ?? "2.4";
+    const parent = n.contract.split(".").slice(1).join(".");
+    document.getElementById("acct").textContent = n.contract;
+    document.getElementById("amt").textContent = amount;
+    document.getElementById("pk").textContent = pk || "missing ?pk=";
+    document.getElementById("go").onclick = async () => {
+      const out = document.getElementById("out");
+      try {
+        if (!/^ed25519:[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(pk)) throw new Error("No deploy key in the link.");
+        if (await accountExists(n, n.contract)) throw new Error(`${n.contract} already exists.`);
+        const who = await connect(n);
+        if (who !== parent) throw new Error(`Connect ${parent}, not ${who}.`);
+        const [whole, frac = ""] = amount.split(".");
+        const yocto = (BigInt(whole) * 10n ** 24n + BigInt((frac + "0".repeat(24)).slice(0, 24))).toString();
+        const res = assertOk(await send(n, n.contract, [
+          { type: "CreateAccount" },
+          { type: "Transfer", params: { deposit: yocto } },
+          { type: "AddKey", params: { publicKey: pk, accessKey: { permission: "FullAccess" } } },
+        ]));
+        out.innerHTML = `<div class="note good">Created. Transaction ${res.transaction?.hash ?? ""}. Go back to the terminal.</div>`;
+      } catch (e) {
+        out.innerHTML = `<div class="note bad">${String(e.message ?? e).replace(/</g, "&lt;")}</div>`;
+      }
+    };
+  </script>
+</body>
+</html>

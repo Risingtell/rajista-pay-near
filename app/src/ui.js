@@ -8,6 +8,23 @@ export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
+// A receipt is written by the shop, so anything in it is untrusted: force every field to the type
+// the pages expect before it is shown. Text is still escaped wherever it goes into HTML.
+export function clean(r) {
+  if (!r || typeof r !== "object") return null;
+  const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const str = (v, max) => String(v ?? "").slice(0, max);
+  return {
+    shop: str(r.shop, 60),
+    account: str(r.account, 64),
+    currency: "NGN",
+    rate: num(r.rate),
+    total: num(r.total),
+    issued: str(r.issued, 40),
+    items: (Array.isArray(r.items) ? r.items : []).slice(0, 50).map(i => ({ name: str(i?.name, 60), qty: Math.floor(num(i?.qty)), price: num(i?.price) })),
+  };
+}
+
 export const naira = n => "₦" + Math.round(Number(n)).toLocaleString("en-NG");
 export const usdc = units => (Number(units) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 export const short = (s, a = 6, b = 4) => (s && s.length > a + b + 1 ? `${s.slice(0, a)}…${s.slice(-b)}` : s ?? "");

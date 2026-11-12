@@ -83,8 +83,8 @@ const tillAcct = acct(SHOP, till.toString());
 const run = Date.now().toString(36);
 const items = [{ name: "Wireless mouse", qty: 1, naira: 8000 }, { name: "USB-C cable 1m", qty: 2, naira: 6000 }];
 const itemsHash = createHash("sha256").update(JSON.stringify(items)).digest("base64");
-const issue = (id, amount, dueMs, label) => call(SHOP, PAY, "create_invoice",
-  { id, amount: usd(amount), due_ms: String(dueMs), items_hash: itemsHash, note: "N20,000 at N1,600/USDC" },
+const issue = (id, amount, dueInMs, label) => call(SHOP, PAY, "create_invoice",
+  { id, amount: usd(amount), due_in_ms: String(dueInMs), items_hash: itemsHash, note: "N20,000 at N1,600/USDC" },
   { as: tillAcct, label });
 
 // 3. Direct payments from a NEAR wallet: wrong payments are refunded.
@@ -92,7 +92,7 @@ const ftPay = (from, id, amount, label) => call(from, USDC, "ft_transfer_call",
   { receiver_id: PAY, amount: usd(amount), msg: id }, { deposit: "1", gas: teraToGas(150), label });
 
 const A = `KANO-${run}-A`;
-await issue(A, 12.5, Date.now() + 3600_000, `till issues ${A}: 12.50 USDC, no wallet prompt`);
+await issue(A, 12.5, 3600_000, `till issues ${A}: 12.50 USDC, no wallet prompt`);
 const c0 = await bal(CUSTOMER);
 await ftPay(CUSTOMER, A, 10, "wallet pays 10.00 (short) → refunded");
 const c1 = await bal(CUSTOMER);
@@ -105,19 +105,19 @@ await issue(V, 3, 0, `till issues ${V}`);
 await call(SHOP, PAY, "void_invoice", { id: V }, { as: tillAcct, label: `till voids ${V}` });
 await ftPay(CUSTOMER, V, 3, "wallet pays the voided invoice → refunded");
 const E = `KANO-${run}-E`;
-await issue(E, 2, Date.now() + 15_000, `till issues ${E}, due in 15 s`);
+await issue(E, 2, 15_000, `till issues ${E}, due in 15 s`);
 await sleep(20_000);
 await ftPay(CUSTOMER, E, 2, "wallet pays after the due time → refunded");
 const c3 = await bal(CUSTOMER);
 
 // 4. Router payments (how NEAR Intents 1Click delivers with customRecipientMsg): never sent back.
 const B = `KANO-${run}-B`;
-await issue(B, 7.25, Date.now() + 3600_000, `till issues ${B}: 7.25 USDC`);
+await issue(B, 7.25, 3600_000, `till issues ${B}: 7.25 USDC`);
 const r0 = await bal(ROUTER);
 await ftPay(ROUTER, B, 7.25, "router delivers 7.25 → paid");
 await ftPay(ROUTER, B, 7.25, "router delivers 7.25 again → held for the shop as extra");
 const L = `KANO-${run}-L`;
-await issue(L, 1, Date.now() + 15_000, `till issues ${L}, due in 15 s`);
+await issue(L, 1, 15_000, `till issues ${L}, due in 15 s`);
 await sleep(20_000);
 await ftPay(ROUTER, L, 1, "router delivers after the due time → paid, marked late");
 await ftPay(ROUTER, `KANO-${run}-ghost`, 0.5, "router delivers to an id that never existed → unclaimed");

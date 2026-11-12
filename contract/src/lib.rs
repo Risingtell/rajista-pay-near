@@ -41,6 +41,9 @@ const MAX_ID_LEN: usize = 64;
 const MAX_NOTE_LEN: usize = 200;
 const GAS_FT_TRANSFER: Gas = Gas::from_tgas(10);
 const GAS_CALLBACK: Gas = Gas::from_tgas(10);
+/// Bytes a payment later adds to an invoice (paid time, and a payer id of up to 64 characters),
+/// charged when the invoice is created so the contract never pays for a shop's storage.
+const PAYMENT_RESERVE_BYTES: u64 = 80;
 
 #[ext_contract(ext_ft)]
 pub trait FungibleToken {
@@ -51,7 +54,8 @@ pub trait FungibleToken {
 #[near]
 enum StorageKey {
     Invoices,
-    ShopInvoices,
+    ShopIndex,
+    ShopCount,
     Balances,
     StorageCredit,
 }
@@ -94,7 +98,9 @@ pub struct Contract {
     usdc: AccountId,
     router: Option<AccountId>,
     invoices: LookupMap<String, Invoice>,
-    shop_invoices: LookupMap<AccountId, Vec<String>>,
+    /// "<shop>#<n>" -> invoice id, so issuing costs the same however many invoices a shop has.
+    shop_index: LookupMap<String, String>,
+    shop_count: LookupMap<AccountId, u32>,
     balances: LookupMap<AccountId, u128>,
     storage_credit: LookupMap<AccountId, u128>,
     unclaimed: u128,
@@ -126,24 +132,29 @@ impl Contract {
             usdc,
             router,
             invoices: LookupMap::new(StorageKey::Invoices),
-            shop_invoices: LookupMap::new(StorageKey::ShopInvoices),
+            shop_index: LookupMap::new(StorageKey::ShopIndex),
+            shop_count: LookupMap::new(StorageKey::ShopCount),
             balances: LookupMap::new(StorageKey::Balances),
             storage_credit: LookupMap::new(StorageKey::StorageCredit),
             unclaimed: 0,
         }
     }
 
-    /// The shop (the caller) issues an invoice. Storage is paid from the attached NEAR (the rest is
-    /// returned) or, when nothing is attached, from the shop's prepaid storage credit.
+    /// The shop (the caller) issues an invoice, due `due_in_ms` after the block time (0 = no
+    /// expiry), so a till with a wrong clock cannot set a wrong due time. Storage is paid from the
+    /// attached NEAR (the rest is returned) or, when nothing is attached, from the shop's prepaid
+    /// storage credit. Everything the invoice adds to state is charged, including the shop's
+    /// balance entry, so a later payment never makes the contract pay for storage.
     #[payable]
-    pub fn create_invoice(&mut self, id: String, amount: U128, due_ms: U64, items_hash: Base64VecU8, note: String) {
+    pub fn create_invoice(&mut self, id: String, amount: U128, due_in_ms: U64, items_hash: Base64VecU8, note: String) {
         let shop = env::predecessor_account_id();
         require!(!id.is_empty() && id.len() <= MAX_ID_LEN, "id must be 1-64 characters");
         require!(id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'), "id may use letters, digits, - and _");
         require!(amount.0 > 0, "amount must be above zero");
         require!(items_hash.0.len() == 32, "items_hash must be a SHA-256 digest");
         require!(note.len() <= MAX_NOTE_LEN, "note is too long");
-        require!(due_ms.0 == 0 || due_ms.0 > now_ms(), "due date is in the past");
+        require!(due_in_ms.0 <= 30 * 24 * 3600 * 1000, "due time is more than 30 days away");
+        let due_ms = U64(if due_in_ms.0 == 0 { 0 } else { now_ms() + due_in_ms.0 });
         require!(!self.invoices.contains_key(&id), "invoice id already used");
 
         let before = env::storage_usage();
@@ -162,10 +173,17 @@ impl Contract {
             extra: U128(0),
         };
         self.invoices.insert(id.clone(), invoice);
-        self.shop_invoices.entry(shop.clone()).or_default().push(id.clone());
+        let n = self.shop_count.get(&shop).copied().unwrap_or(0);
+        self.shop_index.insert(format!("{shop}#{n}"), id.clone());
+        self.shop_count.insert(shop.clone(), n + 1);
+        if !self.balances.contains_key(&shop) {
+            self.balances.insert(shop.clone(), 0);
+        }
         self.invoices.flush();
-        self.shop_invoices.flush();
-        let used = env::storage_usage().saturating_sub(before) as u128;
+        self.shop_index.flush();
+        self.shop_count.flush();
+        self.balances.flush();
+        let used = (env::storage_usage().saturating_sub(before) + PAYMENT_RESERVE_BYTES) as u128;
         let cost = env::storage_byte_cost().saturating_mul(used);
         let attached = env::attached_deposit();
         if attached > zero() {
@@ -198,8 +216,14 @@ impl Contract {
     pub fn storage_deposit(&mut self, shop: Option<AccountId>) -> U128 {
         let shop = shop.unwrap_or_else(env::predecessor_account_id);
         let amount = env::attached_deposit().as_yoctonear();
-        require!(amount > 0, "attach NEAR to deposit");
-        let credit = self.storage_credit.get(&shop).copied().unwrap_or(0) + amount;
+        let before = env::storage_usage();
+        let old = self.storage_credit.get(&shop).copied();
+        self.storage_credit.insert(shop.clone(), old.unwrap_or(0));
+        self.storage_credit.flush();
+        // A new entry is paid for out of the deposit itself.
+        let entry_cost = env::storage_byte_cost().as_yoctonear() * env::storage_usage().saturating_sub(before) as u128;
+        require!(amount > entry_cost, format!("attach more than {entry_cost} yoctoNEAR"));
+        let credit = old.unwrap_or(0) + amount - entry_cost;
         self.storage_credit.insert(shop, credit);
         U128(credit)
     }
@@ -286,17 +310,17 @@ impl Contract {
 
     /// Oldest first. Use `get_shop_invoice_count` to page from the newest end.
     pub fn get_shop_invoices(&self, shop: AccountId, from_index: Option<u32>, limit: Option<u32>) -> Vec<Invoice> {
-        let ids = match self.shop_invoices.get(&shop) {
-            Some(ids) => ids,
-            None => return vec![],
-        };
-        let from = from_index.unwrap_or(0) as usize;
-        let limit = limit.unwrap_or(50).min(100) as usize;
-        ids.iter().skip(from).take(limit).filter_map(|id| self.invoices.get(id).cloned()).collect()
+        let count = self.get_shop_invoice_count(shop.clone());
+        let from = from_index.unwrap_or(0).min(count);
+        let to = from.saturating_add(limit.unwrap_or(50).min(100)).min(count);
+        (from..to)
+            .filter_map(|i| self.shop_index.get(&format!("{shop}#{i}")))
+            .filter_map(|id| self.invoices.get(id).cloned())
+            .collect()
     }
 
     pub fn get_shop_invoice_count(&self, shop: AccountId) -> u32 {
-        self.shop_invoices.get(&shop).map(|ids| ids.len() as u32).unwrap_or(0)
+        self.shop_count.get(&shop).copied().unwrap_or(0)
     }
 
     pub fn get_balance(&self, shop: AccountId) -> U128 {
@@ -413,9 +437,10 @@ mod tests {
         Contract::new(usdc(), Some(router()))
     }
 
+    /// `due_ms` is absolute in tests for readability; invoices are created at t = 1_000.
     fn create(c: &mut Contract, id: &str, amount: u128, due_ms: u64) {
         ctx(shop(), 10u128.pow(22), 1_000);
-        c.create_invoice(id.into(), U128(amount), U64(due_ms), hash(), "N45,000 at N1,500/$".into());
+        c.create_invoice(id.into(), U128(amount), U64(if due_ms == 0 { 0 } else { due_ms - 1_000 }), hash(), "N45,000 at N1,500/$".into());
     }
 
     fn pay_as(c: &mut Contract, from_token: AccountId, sender: AccountId, id: &str, amount: u128, now: u64) -> u128 {
@@ -677,5 +702,53 @@ mod tests {
         let page = c.get_shop_invoices(shop(), Some(2), Some(2));
         assert_eq!(page.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), vec!["INV-2", "INV-3"]);
         assert_eq!(c.get_shop_invoice_count(shop()), 5);
+        assert!(c.get_shop_invoices(shop(), Some(5), Some(10)).is_empty());
+        assert!(c.get_shop_invoices(customer(), None, None).is_empty());
+    }
+
+    #[test]
+    fn due_time_comes_from_block_time_not_the_till_clock() {
+        let mut c = setup();
+        ctx(shop(), 10u128.pow(22), 50_000);
+        c.create_invoice("INV-1".into(), U128(10), U64(60_000), hash(), "".into());
+        assert_eq!(inv(&c, "INV-1").due_ms.0, 110_000);
+        ctx(shop(), 10u128.pow(22), 50_000);
+        c.create_invoice("INV-2".into(), U128(10), U64(0), hash(), "".into());
+        assert_eq!(inv(&c, "INV-2").due_ms.0, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "due time is more than 30 days away")]
+    fn due_time_is_capped() {
+        let mut c = setup();
+        ctx(shop(), 10u128.pow(22), 1_000);
+        c.create_invoice("INV-1".into(), U128(10), U64(31 * 24 * 3600 * 1000), hash(), "".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "attach more than")]
+    fn storage_deposit_pays_for_its_own_entry() {
+        let mut c = setup();
+        ctx(customer(), 1, 1_000);
+        c.storage_deposit(Some("random-123.test".parse().unwrap()));
+    }
+
+    #[test]
+    fn payments_never_add_storage_the_contract_pays_for() {
+        let mut c = setup();
+        create(&mut c, "INV-1", 10, 0);
+        create(&mut c, "INV-2", 10, 0);
+        // One block, flushed by hand: each simulated block resets the storage counter.
+        ctx(usdc(), 0, 2_000);
+        let before = env::storage_usage();
+        let _ = c.ft_on_transfer(router(), U128(10), "INV-1".into());
+        let _ = c.ft_on_transfer(router(), U128(10), "INV-1".into());
+        let _ = c.ft_on_transfer(customer(), U128(12), "INV-2".into());
+        let _ = c.ft_on_transfer(router(), U128(3), "NOPE".into());
+        c.invoices.flush();
+        c.balances.flush();
+        // Two invoices were paid; each prepaid PAYMENT_RESERVE_BYTES for exactly this.
+        assert!(env::storage_usage() - before <= 2 * PAYMENT_RESERVE_BYTES);
+        assert_eq!(c.get_balance(shop()).0, 30);
     }
 }

@@ -9,7 +9,7 @@
     "html_handling": "auto-trailing-slash",
     "run_worker_first": ["/api/*", "/p/*", "/t/*"]
   },
-  // Receipts, quotes and deposit-address lookups. The id is filled in at first deploy.
-  "kv_namespaces": [{ "binding": "PAY", "id": "local-dev-only" }],
+  // Receipts, quotes and deposit-address lookups.
+  "kv_namespaces": [{ "binding": "PAY", "id": "bc492e5d8b4d4c6c820957be5df709ef" }],
   "observability": { "enabled": true }
 }

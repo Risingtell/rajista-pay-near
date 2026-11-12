@@ -102,6 +102,7 @@ async function quote(req, env) {
     amountIn: q.amountIn, amountInFormatted: q.amountInFormatted, minAmountIn: q.minAmountIn,
     amountOutFormatted: q.amountOutFormatted, timeEstimate: q.timeEstimate,
     depositAddress: q.depositAddress ?? null, depositMemo: q.depositMemo ?? null, deadline: q.deadline ?? deadline,
+    requestDeadline: deadline,
   };
   if (!dry) {
     const key = `q:${n.id}:${id}`;

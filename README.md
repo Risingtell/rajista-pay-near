@@ -1,0 +1,123 @@
+# Rajista Pay on NEAR
+
+A Nigerian shop rings up a sale in naira and shows a QR code. The customer pays with USDC or USDT
+from whichever chain they already hold it on: Solana, Base, Arbitrum, Ethereum, Tron, BNB Chain,
+Polygon, Optimism, Avalanche or NEAR. NEAR Intents converts it, and an invoice contract on NEAR
+decides whether the payment settles the invoice. The shop receives USDC on NEAR and exports a CSV
+for its books.
+
+**Track:** Real-World Money · **Live app:** [rajista-pay.rajista.workers.dev](https://rajista-pay.rajista.workers.dev) · **Contract:** `pay.risingtell.near` (mainnet), `pay.rajistapay-demo.testnet` (testnet)
+
+## Try it in two minutes (free, test network)
+
+1. Open the till on the test network: `/shop?net=testnet`, connect a NEAR testnet wallet, press
+   **Set up this till** (one approval).
+2. Add an item in naira and press **Create invoice**. No wallet prompt: the till key signs it.
+3. Open the pay link on a phone or second tab, pick **USDC on NEAR**, press **Get 20 test USDC**,
+   then **Pay**. The till turns green within a few seconds.
+
+Every step of the same flow, including every rejection path, is on testnet with transaction links:
+[docs/testnet-run.md](docs/testnet-run.md).
+
+## How it works
+
+```
+ Till (browser)                    Invoice contract (NEAR)                 Customer
+ ─────────────                     ───────────────────────                 ────────
+ items in ₦ + rate ─ till key ──▶ create_invoice(id, USDC amount,
+                                   due time, SHA-256 of the items)
+ QR code of /p/<id>  ─────────────────────────────────────────────────▶ opens pay page
+                                                                         picks e.g. USDT on Tron
+                   worker ── 1Click quote: EXACT_OUTPUT to the contract,
+                             customRecipientMsg = invoice id ─────────▶ deposit address
+                                                                         sends on Tron
+ NEAR Intents ── intents.near ft_transfer_call(USDC, msg = id) ──▶ ft_on_transfer
+                                   settles the invoice, credits the shop
+ till sees Paid ◀──────────────────
+ withdraw ──────────────────────▶ ft_transfer to the shop's wallet
+```
+
+- **Exact amount.** The quote is `EXACT_OUTPUT`: the contract receives exactly the invoice amount.
+  Anything the customer sends above the quote's input is returned to their own address by NEAR
+  Intents after the swap.
+- **The invoice id travels with the money.** 1Click's `customRecipientMsg` makes `intents.near`
+  deliver with `ft_transfer_call`, so the contract sees the invoice id. The worker refuses any quote
+  that does not echo the id and the contract back.
+- **Item list cannot change.** The till hashes the receipt (shop name, items, naira total, rate)
+  into the invoice. The worker stores a receipt only if its hash matches the chain, and the pay
+  page checks the hash again in the customer's browser.
+- **Till key.** The shop's wallet signs once to add a function-call key limited to
+  `create_invoice` and `void_invoice` on this contract. Invoice storage comes from NEAR the shop
+  prepaid, so the till never attaches NEAR and never needs a wallet prompt per sale. The key
+  cannot move money.
+
+## The contract decides, not the server
+
+`contract/src/lib.rs`, 27 unit tests (`npm test`, runs in WSL or Linux).
+
+| Payment | From a NEAR wallet | Through NEAR Intents (`intents.near`) |
+|---|---|---|
+| Open invoice, full amount | Paid; change refunded | Paid; any excess held as `extra` |
+| Second payment | Refunded in full | Held as `extra`, shown to the shop as a refund owed |
+| Short payment | Refunded in full | Held as `extra`; invoice stays open |
+| Cancelled invoice | Refunded in full | Held as `extra` |
+| After the due time | Refunded in full | Paid and marked `late` (the quote was issued while it was open) |
+| Unknown invoice id | Refunded in full | Held as `unclaimed`; only the owner can return it |
+| Any other token | Rejected | Rejected |
+
+Why router payments are never sent back: the NEAR Intents contract
+([source](https://github.com/near/intents/blob/main/contracts/defuse/src/contract/tokens/nep141/withdraw.rs))
+credits a returned amount to the Intents account that made the withdrawal, not to the customer. So
+the contract keeps that money visible on the invoice and on the shop's balance, and the shop, who
+has the customer in front of them, refunds it.
+
+Other rules: an invoice is paid once; a paid invoice cannot be cancelled or changed; only the shop
+can withdraw its balance (1 yoctoNEAR confirmation, re-credited if the transfer fails); ids are
+unique forever; the owner can touch only `unclaimed` money, never a shop's balance. Every state
+change emits a NEP-297 event (`standard: "rajista_pay"`).
+
+## What is in the repo
+
+| Path | What |
+|---|---|
+| `contract/` | Invoice contract (Rust, near-sdk 5.30) |
+| `mock-usdc/` | Test USDC for testnet (NEP-141, 6 decimals, anyone can mint up to 100) |
+| `res/` | Built wasm (plain MVP wasm; `scripts/build.sh` rebuilds it) |
+| `worker/` | Cloudflare Worker: 1Click quotes and status, receipt store, NGN rate |
+| `app/` | Landing page, shop till, customer pay page (Vite, NEAR Connect wallets) |
+| `scripts/testnet-e2e.mjs` | Deploys to testnet and runs every money path, writes `docs/testnet-run.md` |
+
+The worker holds no keys and no money. It keeps three things in Cloudflare KV: receipts (only
+after the hash check), which deposit addresses belong to which invoice, and a per-invoice quote
+counter.
+
+## Run it
+
+```bash
+npm install
+npm run build && npx wrangler dev        # app + API on http://localhost:8787
+bash scripts/test.sh                     # contract tests
+bash scripts/build.sh                    # rebuild res/*.wasm
+node scripts/testnet-e2e.mjs --fresh     # full testnet run (needs a funded key in .keys/)
+```
+
+## Prior work and what is new
+
+Rajista Pay began as a Solana entry, [Risingtell/rajista-pay](https://github.com/Risingtell/rajista-pay):
+a USDC till on Solana with an Anchor program. That code is not used here. Everything in this
+repository was written for NEAR after 19 October 2026: the invoice contract, the NEAR Intents
+cross-chain flow, the till key, the worker and the app. Rajista itself is a point-of-sale app for
+Nigerian shops ([www.rajista.com](https://www.rajista.com)); this is its crypto checkout.
+
+My other NEAR Hackathon entry is **AfriRadar on NEAR** (Agent Economy track), an independent project.
+
+## Notes
+
+- NEAR Intents has no testnet, so cross-chain payments run on mainnet only. The testnet run plays
+  `intents.near` with a stand-in account to prove the contract side.
+- Some routes have temporary minimums set by the network (for example Tron USDT and BNB Chain
+  USDT). The pay page asks for a live quote before showing an address and says so plainly when a
+  route is not available for that amount.
+- The naira rate is the shop's own. The till suggests the market rate, and the shop can change it.
+
+Built by Rising Technology, Jaba, Kano. MIT licence.

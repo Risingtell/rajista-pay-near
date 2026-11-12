@@ -1,8 +1,8 @@
 import { NETWORKS, toUnits } from "./config.js";
-import { view, viewFresh, getInvoice, sha256b64 } from "./chain.js";
+import { view, viewFresh, getInvoice, sha256b64, accessKey } from "./chain.js";
 import { connect, currentAccount, disconnect, send, sendMany, fnCall, assertOk, onChange } from "./wallet.js";
 import { newTillKey, saveTillKey, forgetTillKey, tillStatus, tillCall } from "./till.js";
-import { $, esc, naira, usdc, when, header, qr, toast, copy, pill, api, accountLink, short } from "./ui.js";
+import { $, esc, naira, usdc, when, header, qr, toast, copy, pill, api, accountLink, short, clean } from "./ui.js";
 
 const params = new URLSearchParams(location.search);
 const n = NETWORKS[params.get("net")] ?? NETWORKS.mainnet;
@@ -69,6 +69,7 @@ async function render() {
   loadRate();
   refreshMoney();
   refreshList();
+  flushReceipts();
 }
 
 $("#btn-connect").addEventListener("click", async () => {
@@ -150,7 +151,8 @@ async function runSetup(s) {
     (outs ?? []).forEach(assertOk);
     toast("Till is ready");
   } catch (e) {
-    if (kp) forgetTillKey(n, shop);
+    // Keep the key if its AddKey went through, even when another part of setup failed.
+    if (kp && !(await accessKey(n, shop, kp.getPublicKey().toString()))) forgetTillKey(n, shop);
     toast(e.message ?? "Setup was not completed", "bad");
   } finally {
     btn.disabled = false;
@@ -229,12 +231,14 @@ $("#btn-issue").addEventListener("click", async () => {
   btn.innerHTML = `<span class="spinner"></span> Creating`;
   try {
     const res = await tillCall(n, shop, "create_invoice", {
-      id, amount: toUnits(usd), due_ms: String(dueIn ? Date.now() + dueIn : 0),
+      id, amount: toUnits(usd), due_in_ms: String(dueIn),
       items_hash: await sha256b64(receipt), note: `${naira(ngn)} at ₦${rate}/USDC`.slice(0, 200),
     });
     assertOk(res);
-    await api("/api/receipt", { net: n.id, id, receipt });
+    // The invoice now exists on chain: from here on, never report it as failed.
+    queueReceipt(id, receipt);
     showCurrent(id, ngn, usd);
+    flushReceipts();
     $("#items tbody").innerHTML = "";
     addItem();
     refreshList();
@@ -246,6 +250,34 @@ $("#btn-issue").addEventListener("click", async () => {
     btn.textContent = "Create invoice";
   }
 });
+
+// Receipts wait on this device until the server has them, so a network blip never loses items.
+const QUEUE = `rajista-pay:receipts:${n.id}`;
+const readQueue = () => { try { return JSON.parse(local.get(QUEUE) ?? "{}"); } catch { return {}; } };
+function queueReceipt(id, receipt) {
+  const q = readQueue();
+  q[id] = receipt;
+  local.set(QUEUE, JSON.stringify(q));
+}
+async function flushReceipts() {
+  const q = readQueue();
+  for (const [id, receipt] of Object.entries(q)) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await api("/api/receipt", { net: n.id, id, receipt });
+        delete q[id];
+        break;
+      } catch (e) {
+        if (e.status === 409 || e.status === 400) { delete q[id]; break; } // will never be accepted
+        await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+      }
+    }
+  }
+  local.set(QUEUE, JSON.stringify(q));
+  const left = Object.keys(q).length;
+  if (left) toast(`${left} receipt(s) not saved yet; they retry automatically`, "bad");
+  return left;
+}
 
 async function showCurrent(id, ngn, usd) {
   if (current?.timer) clearInterval(current.timer);
@@ -347,7 +379,7 @@ async function receipts(ids) {
   return out;
 }
 
-const parse = s => { try { return JSON.parse(s); } catch { return null; } };
+const parse = s => { try { return clean(JSON.parse(s)); } catch { return null; } };
 const through = inv => inv.status !== "Paid" ? "" : inv.payer === n.router ? "NEAR Intents" : inv.payer;
 
 async function refreshList() {

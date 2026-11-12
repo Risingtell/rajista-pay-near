@@ -1,7 +1,7 @@
 import { NETWORKS, PAY_OPTIONS, ADDRESS_PATTERNS, INVOICE_ID } from "./config.js";
 import { view, viewFresh, getInvoice, sha256b64 } from "./chain.js";
 import { connect, currentAccount, send, fnCall, assertOk } from "./wallet.js";
-import { $, $$, esc, naira, usdc, when, header, qr, toast, copy, pill, api, accountLink, txLink, short } from "./ui.js";
+import { $, $$, esc, naira, usdc, when, header, qr, toast, copy, pill, api, accountLink, txLink, short, clean } from "./ui.js";
 
 // /p/<id> = live network, /t/<id> = test network, or /pay?net=..&id=..
 const path = /^\/([pt])\/([A-Za-z0-9_-]{1,64})$/.exec(location.pathname);
@@ -33,7 +33,7 @@ async function load() {
   const r = await api(`/api/receipts?net=${n.id}&ids=${id}`).catch(() => ({}));
   if (r[id]) {
     verified = (await sha256b64(r[id])) === inv.items_hash;
-    if (verified) receipt = JSON.parse(r[id]);
+    if (verified) receipt = clean(JSON.parse(r[id]));
   }
   renderInvoice();
   route();
@@ -49,9 +49,9 @@ function renderInvoice() {
   const items = receipt?.items ?? [];
   $("#invoice").innerHTML = `
     <div class="row"><div class="grow"><div class="label-up">${esc(receipt?.shop ?? "Shop")}</div><div class="small muted">${accountLink(n, inv.shop)}</div></div>${pill(inv)}</div>
-    ${items.length ? `<table class="items">${items.map(i => `<tr><td>${i.qty} × ${esc(i.name)}</td><td class="num">${naira(i.qty * i.price)}</td></tr>`).join("")}</table>` : ""}
+    ${items.length ? `<table class="items">${items.map(i => `<tr><td>${esc(i.qty)} × ${esc(i.name)}</td><td class="num">${naira(i.qty * i.price)}</td></tr>`).join("")}</table>` : ""}
     <div class="row" style="align-items:flex-end;border-top:1.5px solid var(--line);padding-top:14px">
-      <div class="grow">${receipt ? `<div class="label-up">Total</div><div style="font-size:22px;font-weight:800">${naira(receipt.total)}</div><div class="small muted">at ₦${receipt.rate} per USDC</div>` : ""}</div>
+      <div class="grow">${receipt ? `<div class="label-up">Total</div><div style="font-size:22px;font-weight:800">${naira(receipt.total)}</div><div class="small muted">at ₦${esc(receipt.rate)} per USDC</div>` : ""}</div>
       <div style="text-align:right"><div class="label-up">${inv.status === "Paid" ? "Paid" : "To pay"}</div><div class="big">${usdc(inv.amount)}</div><div class="small muted">USDC</div></div>
     </div>
     <div class="small muted">Invoice <span class="mono">${esc(inv.id)}</span> · issued ${when(inv.created_ms)}${Number(inv.due_ms) ? ` · <span id="countdown"></span>` : ""}</div>
@@ -75,7 +75,7 @@ function tickCountdown() {
   const draw = () => {
     const left = Number(inv.due_ms) - Date.now();
     if (inv.status !== "Open") { el.textContent = `due ${when(inv.due_ms)}`; return; }
-    if (left <= 0) { el.textContent = "expired"; clearInterval(countdownTimer); route(); return; }
+    if (left <= 0) { el.textContent = "expired"; clearInterval(countdownTimer); if (!store.get()) route(); return; }
     const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
     el.textContent = m > 90 ? `due ${when(inv.due_ms)}` : `${m}:${String(s).padStart(2, "0")} left to pay`;
   };
@@ -84,13 +84,32 @@ function tickCountdown() {
 }
 
 function route() {
+  clearInterval(poll);
   $("#pay").classList.add("hide");
+  $("#progress").classList.add("hide");
+  const q = store.get();
+  // A payment already sent must be followed to the end, whatever the invoice's state now.
+  if (q?.depositAddress) return resume(q);
   if (inv.status === "Paid") return showPaymentLinks();
   if (inv.status === "Void") return note("The shop cancelled this invoice. Ask them for a new one.");
   if (expired()) return note("This invoice has expired. Ask the shop for a new one.");
-  const q = store.get();
-  if (q?.depositAddress) return showDeposit(q);
   showOptions();
+}
+
+// A saved deposit address is only shown again while it is still valid, or once money was seen.
+async function resume(q) {
+  const s = await api(`/api/status?depositAddress=${encodeURIComponent(q.depositAddress)}`).catch(() => null);
+  const untouched = !s || s.status === "PENDING_DEPOSIT";
+  if (untouched && Date.now() > Date.parse(q.requestDeadline ?? 0)) {
+    store.clear();
+    if (inv.status === "Open" && !expired()) {
+      showOptions();
+      $("#opt-panel").innerHTML = `<div class="note">Your previous payment address has expired. Pick a network to get a new one.</div>`;
+      return;
+    }
+    return route();
+  }
+  showDeposit(q);
 }
 
 function note(text) {
@@ -134,19 +153,21 @@ async function chooseCross(o, btn) {
     <div class="field"><label for="refund">Your ${o.name} address (the one you pay from)</label><input id="refund" autocomplete="off" spellcheck="false" placeholder="${o.chain === "sol" ? "e.g. 7xKX…" : o.chain === "tron" ? "T…" : o.chain === "near" ? "you.near" : "0x…"}"><div class="small muted">If anything goes wrong, the money comes back here.</div></div>
     <button class="wide" id="get-address">Get payment address</button>`;
   $("#get-address").addEventListener("click", async e => {
+    const btn = e.currentTarget;
     const refundTo = $("#refund").value.trim();
     if (!ADDRESS_PATTERNS[o.chain].test(refundTo)) return toast(`That is not a ${o.name} address`, "bad");
-    e.currentTarget.disabled = true;
-    e.currentTarget.innerHTML = `<span class="spinner"></span> Getting address`;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Getting address`;
     try {
       const q = await api("/api/quote", { net: n.id, id, asset: o.asset, refundTo });
-      const saved = { ...q, chainKey: o.chain, refundTo, at: Date.now() };
+      // What the invoice looked like before this payment, to tell its outcome apart from others.
+      const saved = { ...q, chainKey: o.chain, refundTo, at: Date.now(), before: { status: inv.status, extra: inv.extra } };
       store.set(saved);
       showDeposit(saved);
     } catch (err) {
       toast(err.message, "bad");
-      e.currentTarget.disabled = false;
-      e.currentTarget.textContent = "Get payment address";
+      btn.disabled = false;
+      btn.textContent = "Get payment address";
     }
   });
 }
@@ -217,22 +238,33 @@ async function follow(q) {
   if ($("#st-text")) $("#st-text").textContent = text + extra;
   if (s.status === "SUCCESS" || s.status === "REFUNDED" || s.status === "FAILED") {
     clearInterval(poll);
-    if (s.status === "SUCCESS") return waitForPaid();
+    if (s.status === "SUCCESS") return waitForPaid(q);
     store.clear();
   }
 }
 
-async function waitForPaid() {
-  for (let i = 0; i < 40; i++) {
+// 1Click reports SUCCESS when the USDC reaches the contract. Wait until the contract's state shows
+// this payment: either it settled the invoice, or it was held for the shop to refund.
+async function waitForPaid(q) {
+  const before = q.before ?? { status: "Open", extra: "0" };
+  let settled = false, held = false;
+  for (let i = 0; i < 40 && !settled && !held; i++) {
     inv = await getInvoice(n, id, true).catch(() => inv);
-    if (inv.status === "Paid" || BigInt(inv.extra) > 0n) break;
-    await new Promise(r => setTimeout(r, 3000));
+    settled = before.status !== "Paid" && inv.status === "Paid";
+    held = BigInt(inv.extra) > BigInt(before.extra ?? 0);
+    if (!settled && !held) await new Promise(r => setTimeout(r, 3000));
   }
   store.clear();
   $("#progress").classList.add("hide");
   renderInvoice();
-  if (inv.status !== "Paid") note("Your payment arrived after the invoice closed. The shop holds it and will refund you; show them this page.");
-  else showPaymentLinks();
+  if (settled) {
+    showPaymentLinks();
+    if (held && BigInt(inv.extra) - BigInt(before.extra ?? 0) > 0n) note(`You sent more than the invoice. The shop holds the extra ${usdc(BigInt(inv.extra) - BigInt(before.extra ?? 0))} USDC and will refund it.`);
+  } else if (held) {
+    note(`This invoice was ${before.status === "Paid" ? "already paid" : "closed"} when your payment arrived. The shop holds your ${usdc(BigInt(inv.extra) - BigInt(before.extra ?? 0))} USDC and will refund it; show them this page.`);
+  } else {
+    note("Your payment was delivered and is being recorded. Refresh in a minute.");
+  }
 }
 
 async function showPaymentLinks() {
