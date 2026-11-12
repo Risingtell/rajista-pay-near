@@ -5,6 +5,7 @@
 
 import { NETWORKS, PAY_OPTIONS, ADDRESS_PATTERNS, INVOICE_ID } from "../app/src/config.js";
 import { getInvoice, sha256b64 } from "../app/src/chain.js";
+import { refundPlaceholder } from "./placeholder.js";
 
 const ONECLICK = "https://1click.chaindefuser.com/v0";
 const MAX_RECEIPT = 4096;
@@ -113,15 +114,6 @@ async function quote(req, env) {
     await env.PAY.put(`d:${q.depositAddress}`, JSON.stringify({ net: n.id, id }));
   }
   return json(out);
-}
-
-// Dry quotes need a syntactically valid refund address; nothing is ever sent to it.
-function refundPlaceholder(chain) {
-  return {
-    sol: "So11111111111111111111111111111111111111112",
-    tron: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
-    near: "intents.near",
-  }[chain] ?? "0x000000000000000000000000000000000000dEaD";
 }
 
 function statusView(b) {
