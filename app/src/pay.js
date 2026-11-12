@@ -267,6 +267,14 @@ async function waitForPaid(q) {
   }
 }
 
+// NEAR Intents does not always send an explorer link for the customer's transaction.
+const EXPLORERS = {
+  Solana: "https://solscan.io/tx/", Base: "https://basescan.org/tx/", Arbitrum: "https://arbiscan.io/tx/",
+  Ethereum: "https://etherscan.io/tx/", Tron: "https://tronscan.org/#/transaction/", "BNB Chain": "https://bscscan.com/tx/",
+  Polygon: "https://polygonscan.com/tx/", Optimism: "https://optimistic.etherscan.io/tx/", Avalanche: "https://snowtrace.io/tx/",
+  NEAR: "https://nearblocks.io/txns/",
+};
+
 async function showPaymentLinks() {
   const el = $("#pay-links");
   if (!el || inv.payer !== n.router) return;
@@ -277,7 +285,9 @@ async function showPaymentLinks() {
     if (s?.status !== "SUCCESS") continue;
     const origin = s.originTx[0];
     const dest = s.destinationTx[0];
-    rows.push(`Paid with ${esc(p.symbol)} on ${esc(p.chain)}: ${origin ? `<a href="${esc(origin.explorerUrl)}" target="_blank" rel="noopener">${esc(short(origin.hash))}</a>` : ""}${dest ? ` → ${txLink(n, dest.hash, "NEAR delivery")}` : ""}`);
+    const url = origin ? origin.explorerUrl || (EXPLORERS[p.chain] ? EXPLORERS[p.chain] + origin.hash : "") : "";
+    const originHtml = origin ? (url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(short(origin.hash))}</a>` : esc(short(origin.hash))) : "";
+    rows.push(`Paid with ${esc(p.symbol)} on ${esc(p.chain)}: ${originHtml}${dest ? ` → ${txLink(n, dest.hash, "NEAR delivery")}` : ""}`);
   }
   el.innerHTML = rows.join("<br>");
 }

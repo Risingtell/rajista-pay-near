@@ -6,7 +6,24 @@ Polygon, Optimism, Avalanche or NEAR. NEAR Intents converts it, and an invoice c
 decides whether the payment settles the invoice. The shop receives USDC on NEAR and exports a CSV
 for its books.
 
-**Track:** Real-World Money · **Live app:** [rajista-pay.rajista.workers.dev](https://rajista-pay.rajista.workers.dev) · **Contract:** `rajistapay.near` (mainnet), `pay.rajistapay-demo.testnet` (testnet)
+**Track:** Real-World Money · **Live app:** [rajista-pay.rajista.workers.dev](https://rajista-pay.rajista.workers.dev) · **Contract:** [`rajistapay.near`](https://nearblocks.io/address/rajistapay.near) (mainnet), `pay.rajistapay-demo.testnet` (testnet)
+
+## A real sale on mainnet
+
+12 November 2026, Rising Technology, Kano. The till sold one item, a customer paid from Base, and
+the contract settled it. Receipt: [/p/RISINGTE-MWDBSJXB3U2](https://rajista-pay.rajista.workers.dev/p/RISINGTE-MWDBSJXB3U2).
+
+| Step | Proof |
+|---|---|
+| Till issues the invoice: 1 × Kuli Kuli, ₦1,140 at ₦1,349.82 = **0.85 USDC**, no wallet prompt | `create_invoice` from `risingtell.near` with its till key |
+| Customer sends 0.858761 USDC **on Base** to the quote's deposit address | [Base tx 0x511df49d…7803](https://basescan.org/tx/0x511df49db1a0cd35f02d8c91d394e2b87f666e613fd7fd18946ad0ca8aac7803) |
+| NEAR Intents swaps exactly 0.85 USDC to NEAR and returns the unused 0.006188 to the customer | 1Click status `SUCCESS` |
+| `intents.near` delivers with `ft_transfer_call`; the contract receives `msg: "RISINGTE-MWDBSJXB3U2"` and settles it | [NEAR tx Afo9C89H…](https://nearblocks.io/txns/Afo9C89HutErBxJgqU4N9NrhMqEAV5BZLnxNSFddqzWE) |
+| Invoice `Paid`, payer `intents.near`, not late, nothing held; shop balance 0.85 USDC | `get_invoice`, `get_balance` on `rajistapay.near` |
+
+`rajistapay.near` has no access keys: its code (hash `GKKmNPXpSrEUDaNjGMcza2zCNhB5LDeSZt1JdnYjbuHG`,
+built from `res/rajista_pay.wasm` in this repo) can never be changed, and nobody can move a shop's
+money except the shop.
 
 ## Try it in two minutes (free, test network)
 
