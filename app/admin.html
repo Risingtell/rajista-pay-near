@@ -23,7 +23,7 @@
     import { accountExists } from "/src/chain.js";
     const n = NETWORKS.mainnet;
     const q = new URLSearchParams(location.search);
-    const pk = q.get("pk") ?? "", amount = q.get("near") ?? "2.4";
+    const pk = q.get("pk") ?? "", amount = q.get("near") ?? "2.14";
     const parent = n.contract.split(".").slice(1).join(".");
     document.getElementById("acct").textContent = n.contract;
     document.getElementById("amt").textContent = amount;
