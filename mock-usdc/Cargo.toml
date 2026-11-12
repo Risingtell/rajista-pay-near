@@ -1,0 +1,13 @@
+[package]
+name = "mock-usdc"
+version = "0.1.0"
+edition = "2021"
+description = "Testnet-only USDC stand-in for Rajista Pay demos: anyone can mint up to 100 test USDC per call."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { workspace = true }
+near-contract-standards = { workspace = true }

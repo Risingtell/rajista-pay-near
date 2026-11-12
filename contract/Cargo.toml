@@ -1,0 +1,16 @@
+[package]
+name = "rajista-pay"
+version = "0.1.0"
+edition = "2021"
+description = "Invoice registry for Rajista Pay: shops issue invoices, customers pay in USDC on NEAR, the contract enforces the rules."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { workspace = true }
+near-contract-standards = { workspace = true }
+
+[dev-dependencies]
+near-sdk = { workspace = true, features = ["unit-testing"] }

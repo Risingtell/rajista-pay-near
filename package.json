@@ -1,0 +1,9 @@
+{
+  "name": "rajista-pay",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "near-api-js": "^7.4.0"
+  }
+}
