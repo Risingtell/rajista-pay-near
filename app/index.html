@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rajista Pay</title>
+  <meta name="description" content="A Nigerian shop issues an invoice in naira. The customer pays USDC or USDT from any chain. The shop receives USDC on NEAR, settled by an invoice contract.">
+  <link rel="icon" href="/mark.svg">
+  <link rel="stylesheet" href="/src/styles.css">
+  <style>
+    .hero { background: var(--ink); color: #fff; padding: 72px 0 84px; }
+    .hero h1 { font-size: clamp(40px, 7vw, 84px); font-weight: 800; letter-spacing: -.04em; max-width: 980px; }
+    .hero h1 em { font-style: normal; color: var(--gold); }
+    .hero p { font-size: 21px; color: #C9C7E8; max-width: 760px; margin: 0 0 28px; }
+    .band { padding: 64px 0; border-bottom: 1px solid var(--line); }
+    .band h2 { font-size: clamp(28px, 4vw, 44px); }
+    .steps3 { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1.5px solid var(--ink); }
+    .steps3 > div { padding: 22px 22px 22px 0; }
+    .steps3 > div + div { border-left: 1px solid var(--line); padding-left: 22px; }
+    .steps3 .k { font-size: 54px; font-weight: 800; color: var(--brand); line-height: 1; }
+    .rules { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
+    .rules li { padding: 10px 0; border-bottom: 1px solid var(--dim); }
+    @media (max-width: 760px) { .steps3, .rules { grid-template-columns: 1fr; } .steps3 > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); } }
+    .chips span { display: inline-block; background: #fff; border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; margin: 0 6px 8px 0; font-weight: 600; font-size: 14px; }
+    dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; }
+    dl.facts dt { font-weight: 700; }
+    dl.facts dd { margin: 0; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div id="header"></div>
+  <section class="hero"><div class="wrap">
+    <div class="label-up" style="color:var(--gold)">Rajista Pay · built on NEAR</div>
+    <h1>The shop prices in naira. The customer pays from <em>any chain</em>. The shop gets USDC on NEAR.</h1>
+    <p>A till issues an invoice, shows a QR code, and the customer pays with USDC or USDT from Solana, Base, Ethereum, Tron, BNB Chain or NEAR. NEAR Intents converts it, and an invoice contract on NEAR decides whether it settles.</p>
+    <div class="row" style="flex-wrap:wrap">
+      <a class="btn" href="/shop?net=testnet">Try the till free (test network)</a>
+      <a class="btn ghost" style="color:#fff;border-color:#fff" href="/shop">Open the live till</a>
+    </div>
+  </div></section>
+
+  <section class="band"><div class="wrap">
+    <h2>How a sale works</h2>
+    <div class="steps3">
+      <div><div class="k">1</div><h3>Ring it up in naira</h3><p class="muted">The cashier adds items in ₦ and the rate. The till creates the invoice on NEAR with a till key, so there is no wallet prompt per sale. The item list is hashed into the invoice, so it cannot change later.</p></div>
+      <div><div class="k">2</div><h3>Customer scans and pays</h3><p class="muted">They pick the coin and chain they already hold. NEAR Intents 1Click quotes the exact USDC the invoice needs and gives one deposit address. Anything sent above that comes back to them.</p></div>
+      <div><div class="k">3</div><h3>The contract settles it</h3><p class="muted">The USDC arrives with the invoice id attached. The contract marks it paid and credits the shop. The till turns green. The shop withdraws to its wallet when it likes, and exports a CSV for the books.</p></div>
+    </div>
+  </div></section>
+
+  <section class="band"><div class="wrap grid2" style="gap:48px">
+    <div>
+      <h2>Rules the contract enforces</h2>
+      <p class="muted">Not a server. The invoice contract checks every payment that arrives.</p>
+      <ul class="rules" style="list-style:none;padding:0">
+        <li>Only real USDC can pay</li>
+        <li>An invoice is paid once</li>
+        <li>Short payments never settle</li>
+        <li>Cancelled and expired invoices refuse wallet payments and refund them</li>
+        <li>A paid invoice can never be cancelled or changed</li>
+        <li>Only the shop can withdraw its money</li>
+        <li>The till key can issue and cancel invoices, never move money</li>
+        <li>Cross-chain money is never bounced back into the network: a late or second payment is held and shown to the shop as a refund owed</li>
+      </ul>
+    </div>
+    <div class="stack">
+      <h2>Pay from</h2>
+      <div class="chips"><span>USDC · Solana</span><span>USDT · Solana</span><span>USDC · Base</span><span>USDC · Arbitrum</span><span>USDC · Ethereum</span><span>USDT · Ethereum</span><span>USDT · Tron</span><span>USDT · BNB Chain</span><span>USDC · Polygon</span><span>USDC · Optimism</span><span>USDC · Avalanche</span><span>USDT · NEAR</span><span>USDC · NEAR wallet</span></div>
+      <p class="small muted">Some routes have temporary minimums set by the network (for example Tron USDT and BNB Chain USDT). The pay page checks live and only offers what works for that amount.</p>
+      <div class="card">
+        <dl class="facts small">
+          <dt>Live contract</dt><dd><a href="https://nearblocks.io/address/pay.risingtell.near">pay.risingtell.near</a></dd>
+          <dt>Test contract</dt><dd><a href="https://testnet.nearblocks.io/address/pay.rajistapay-demo.testnet">pay.rajistapay-demo.testnet</a></dd>
+          <dt>Source</dt><dd><a href="https://github.com/Risingtell/rajista-pay-near">github.com/Risingtell/rajista-pay-near</a></dd>
+        </dl>
+      </div>
+    </div>
+  </div></section>
+
+  <section class="band" style="border:0"><div class="wrap narrow" style="max-width:760px">
+    <h2>Why</h2>
+    <p>Many Nigerians who earn online keep their money in USDT or USDC, on whichever chain their employer or exchange uses. Taking that at a shop counter today means a screenshot, a wallet address typed by hand, and trusting that the right amount arrived on the right chain. Rajista Pay gives the shop one QR code per sale, a fixed price in naira, money that lands in one place on NEAR, and a record the shop's accountant can open.</p>
+    <p class="muted">Rajista Pay is from Rising Technology, a computer shop in Jaba, Kano, and the makers of the Rajista point-of-sale app.</p>
+  </div></section>
+
+  <footer class="foot"><div class="wrap">Rajista Pay · Rising Technology and Digital Trends, Kano · <a href="https://www.rajista.com">www.rajista.com</a></div></footer>
+  <script type="module">
+    import { header } from "/src/ui.js";
+    document.getElementById("header").innerHTML = header("home");
+  </script>
+</body>
+</html>

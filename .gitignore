@@ -4,3 +4,6 @@ node_modules/
 .env
 .env.*
 *.log
+!app/.env.test
+app/dist/
+.wrangler/

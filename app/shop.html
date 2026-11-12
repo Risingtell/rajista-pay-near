@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shop till · Rajista Pay</title>
+  <meta name="description" content="Issue a naira invoice, show the QR, get USDC on NEAR.">
+  <link rel="icon" href="/mark.svg">
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div id="header"></div>
+  <main class="wrap stack" style="padding-top:28px">
+    <div class="row" style="flex-wrap:wrap">
+      <div class="grow">
+        <h1 style="font-size:34px">Shop till</h1>
+        <p class="muted" id="netline" style="margin:0"></p>
+      </div>
+      <div id="who" class="row"></div>
+    </div>
+
+    <div id="notice"></div>
+
+    <section id="connect" class="card hide">
+      <h2>Connect the shop's NEAR wallet</h2>
+      <p class="muted">The wallet that receives the money. Meteor, HOT, Intear, MyNearWallet and others work.</p>
+      <button id="btn-connect">Connect wallet</button>
+    </section>
+
+    <section id="setup" class="card hide">
+      <h2>Set up this till</h2>
+      <p class="muted">One wallet approval. After this, every sale is issued from this device with no wallet prompt.</p>
+      <div id="checks"></div>
+      <div class="field" style="margin-top:12px"><label for="shopname">Shop name on receipts</label><input id="shopname" maxlength="60" placeholder="e.g. Rising Technology, Jaba Kano"></div>
+      <p class="small muted" id="setup-cost"></p>
+      <button id="btn-setup" class="wide">Set up this till</button>
+    </section>
+
+    <div id="work" class="grid2 hide">
+      <section class="card stack" id="sale">
+        <div class="row"><h2 class="grow" style="margin:0">New sale</h2><span class="small muted" id="shopname-show"></span></div>
+        <div class="scroll-x">
+          <table id="items">
+            <thead><tr><th>Item</th><th class="num" style="width:70px">Qty</th><th class="num" style="width:130px">Price ₦</th><th style="width:36px"></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button class="quiet small" id="add-item">+ Add item</button>
+        <div class="grid2" style="gap:14px">
+          <div><label for="rate">Rate: ₦ per 1 USDC</label><input id="rate" type="number" inputmode="decimal" min="1" step="0.01"><div class="small muted" id="rate-src"></div></div>
+          <div><label for="due">Customer has</label><select id="due"><option value="900000">15 minutes</option><option value="3600000" selected>1 hour</option><option value="86400000">1 day</option><option value="0">No time limit</option></select></div>
+        </div>
+        <div class="row" style="align-items:flex-end">
+          <div class="grow"><div class="label-up">Total</div><div class="big" id="total-ngn">₦0</div></div>
+          <div style="text-align:right"><div class="label-up">Customer pays</div><div style="font-size:24px;font-weight:800" id="total-usdc">0.00 USDC</div></div>
+        </div>
+        <button id="btn-issue" class="wide">Create invoice</button>
+      </section>
+
+      <section class="card stack" id="current">
+        <h2 style="margin:0">Payment</h2>
+        <div id="current-body"><p class="muted">Create an invoice and the customer's QR code shows here.</p></div>
+      </section>
+    </div>
+
+    <section class="card hide" id="money">
+      <div class="row" style="flex-wrap:wrap">
+        <div class="grow"><div class="label-up">USDC in the contract for this shop</div><div class="big" id="balance">0.00</div></div>
+        <button id="btn-withdraw" class="ghost">Withdraw to my wallet</button>
+      </div>
+      <p class="small muted" id="credit-line" style="margin-bottom:0"></p>
+    </section>
+
+    <section class="card hide" id="history">
+      <div class="row" style="flex-wrap:wrap;margin-bottom:10px">
+        <h2 class="grow" style="margin:0">Invoices</h2>
+        <span class="small muted" id="today"></span>
+        <button class="quiet small" id="btn-refresh">Refresh</button>
+        <button class="ghost small" id="btn-csv">Download CSV</button>
+      </div>
+      <div class="scroll-x"><table id="list"><thead><tr><th>Time</th><th>Invoice</th><th>Items</th><th class="num">Naira</th><th class="num">USDC</th><th>Status</th><th>Paid through</th></tr></thead><tbody></tbody></table></div>
+    </section>
+  </main>
+  <footer class="foot"><div class="wrap">Rajista Pay by Rising Technology, Kano. The invoice contract decides every payment; this page never holds money or keys beyond this device's till key.</div></footer>
+  <script type="module" src="/src/shop.js"></script>
+</body>
+</html>

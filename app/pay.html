@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pay invoice · Rajista Pay</title>
+  <meta name="description" content="Pay a shop invoice with USDC or USDT from any chain.">
+  <link rel="icon" href="/mark.svg">
+  <link rel="stylesheet" href="/src/styles.css">
+  <style>
+    .opts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .opt { background: #fff; color: var(--ink); border: 1.5px solid var(--line); justify-content: flex-start; text-align: left; font-weight: 600; }
+    .opt:hover, .opt.on { background: #EEEDF9; border-color: var(--brand); }
+    .opt b { font-weight: 800; }
+    .items td { padding: 6px 0; border: 0; }
+    .steps { display: flex; gap: 6px; margin: 4px 0 2px; }
+    .steps span { flex: 1; height: 6px; border-radius: 3px; background: var(--dim); }
+    .steps span.on { background: var(--brand); }
+    .steps span.ok { background: var(--green); }
+    @media print { header.top, .no-print, footer.foot { display: none !important; } body { background: #fff; } .card { border: 0; } }
+  </style>
+</head>
+<body>
+  <div id="header"></div>
+  <main class="wrap narrow stack" style="padding-top:24px">
+    <section class="card stack" id="invoice"><p class="muted">Loading invoice…</p></section>
+    <section class="card stack no-print hide" id="pay"></section>
+    <section class="card stack no-print hide" id="progress"></section>
+  </main>
+  <footer class="foot no-print"><div class="wrap narrow">Rajista Pay. Your payment goes to an invoice contract on NEAR that only accepts it for this invoice. <a href="/">How it works</a></div></footer>
+  <script type="module" src="/src/pay.js"></script>
+</body>
+</html>

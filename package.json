@@ -4,6 +4,23 @@
   "type": "module",
   "license": "MIT",
   "dependencies": {
-    "near-api-js": "^7.4.0"
+    "@hot-labs/near-connect": "^0.12.0",
+    "near-api-js": "^7.4.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "vite": "^8.3.7",
+    "wrangler": "^4.159.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261109.1": true
+  },
+  "scripts": {
+    "build": "vite build",
+    "build:test": "vite build --mode test",
+    "dev": "wrangler dev",
+    "deploy": "vite build && wrangler deploy",
+    "test": "bash scripts/test.sh"
   }
 }
