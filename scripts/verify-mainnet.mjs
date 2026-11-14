@@ -6,6 +6,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const RPC = "https://rpc.mainnet.fastnear.com";
+// Ordinary RPC nodes drop transactions after about two days; the archival node keeps them all.
+const ARCHIVAL = "https://archival-rpc.mainnet.fastnear.com";
 const CONTRACT = "rajistapay.near";
 const USDC = "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
 const SHOP = "risingtell.near";
@@ -18,8 +20,8 @@ const check = (ok, what, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${what}${detail ? `  (${detail})` : ""}`);
   if (!ok) failed++;
 };
-async function rpc(method, params) {
-  const r = await fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) }).then(r => r.json());
+async function rpc(method, params, url = RPC) {
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) }).then(r => r.json());
   if (r.error) throw new Error(JSON.stringify(r.error).slice(0, 200));
   return r.result;
 }
@@ -27,7 +29,7 @@ const view = async (account_id, method_name, args = {}) => {
   const r = await rpc("query", { request_type: "call_function", finality: "final", account_id, method_name, args_base64: Buffer.from(JSON.stringify(args)).toString("base64") });
   return JSON.parse(Buffer.from(r.result).toString());
 };
-const tx = (hash, sender) => rpc("EXPERIMENTAL_tx_status", { tx_hash: hash, sender_account_id: sender, wait_until: "FINAL" });
+const tx = (hash, sender) => rpc("EXPERIMENTAL_tx_status", { tx_hash: hash, sender_account_id: sender, wait_until: "FINAL" }, ARCHIVAL);
 const calls = t => t.receipts.flatMap(rc => (rc.receipt.Action?.actions ?? []).filter(a => a.FunctionCall).map(a => ({
   from: rc.predecessor_id, to: rc.receiver_id, method: a.FunctionCall.method_name,
   args: JSON.parse(Buffer.from(a.FunctionCall.args, "base64").toString() || "{}"),
